@@ -1,6 +1,7 @@
 from datetime import date
 from uuid import UUID
 
+from acwa.content.validate import normalize_topic_tag
 from acwa.scheduling.calc import parse_hhmm, validate_timezone
 
 MAX_TIMES = 12
@@ -74,6 +75,11 @@ def campaign_field_errors(data: dict[str, object]) -> dict[str, str]:
     account_id = data.get("account_id")
     if not isinstance(account_id, UUID):
         errors["account_id"] = "Выберите подключённый аккаунт"
+    tag, tag_error = normalize_topic_tag(data.get("threads_topic_tag"))
+    if tag_error:
+        errors["threads_topic_tag"] = tag_error
+    else:
+        data["threads_topic_tag"] = tag
     return errors
 
 

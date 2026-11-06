@@ -40,18 +40,20 @@
 
 Авторизация:
 
-1. `https://threads.com/oauth/authorize` с `threads_basic,threads_content_publish`.
+1. `https://threads.com/oauth/authorize` с `threads_basic,threads_content_publish,threads_manage_insights`.
 2. `POST /oauth/access_token` меняет code на короткий токен (около часа).
 3. `GET /access_token?grant_type=th_exchange_token` меняет его на длинный (около 60 суток, поле `expires_in`).
 4. `GET /refresh_access_token?grant_type=th_refresh_token` обновляет не истёкший длинный токен, если ему больше 24 часов.
 
-Текстовый пост — два шага: `POST /v1.0/{user-id}/threads` с `media_type=TEXT` и `text`, затем `POST /v1.0/{user-id}/threads_publish` с `creation_id`. Лимит текста 500. Эмодзи в подсчёте приложения занимают размер UTF-8, остальные графемы — единицу. Это чтение формулировки Meta, не отдельный официальный алгоритм.
+Текстовый пост — два шага: `POST /v1.0/{user-id}/threads` с `media_type=TEXT` и `text`, затем `POST /v1.0/{user-id}/threads_publish` с `creation_id`. Необязательный `topic_tag` — тема от 1 до 50 символов без точек и амперсандов; он отправляется только с основным постом. Продолжение в комментарии — тот же двухшаговый вызов с `reply_to_id`, равным id уже опубликованного поста. Лимит текста 500 и для поста, и для комментария. Эмодзи в подсчёте приложения занимают размер UTF-8, остальные графемы — единицу. Это чтение формулировки Meta, не отдельный официальный алгоритм. Поля для публикации в сообщество Threads в документации нет, приложение его не отправляет.
 
 Перед публикацией читается `GET /v1.0/{user-id}/threads_publishing_limit`. Квота по умолчанию 250 постов за 86400 секунд. Статус контейнера: `GET /v1.0/{container-id}?fields=status,error_message` (`FINISHED`, `IN_PROGRESS`, `PUBLISHED`, `ERROR`, `EXPIRED`). Если контейнер уже `PUBLISHED`, пост ищется в `GET /v1.0/{user-id}/threads?fields=id,permalink,text,timestamp`.
 
+Статистика поста: `GET /v1.0/{threads-media-id}/insights` с `metric=views,likes,replies,reposts,quotes,shares`. Нужны `threads_basic` и `threads_manage_insights`. Значения в `data[].values[0].value` — накопленные итоги поста, не прибавка за день. Пустой `data` не считается ошибкой. Сбор берёт посты кампании, опубликованные вчера по её часовому поясу. Демонстрационные публикации не запрашиваются. Уже выданный токен без нового разрешения нужно получить заново.
+
 GET-методы Threads по документации передают `access_token` в query. Приложение эти URL не логирует и вырезает `access_token` из текстов ошибок. POST передаёт токен в теле формы.
 
-Для настоящего доступа нужно приложение Meta с use case Threads, Threads App ID и secret, точный redirect URI и тестеры, пока разрешения не прошли App Review. Публиковать можно только от пользователей, выдавших `threads_basic` и `threads_content_publish`.
+Для настоящего доступа нужно приложение Meta с use case Threads, Threads App ID и secret, точный redirect URI и тестеры, пока разрешения не прошли App Review. Публиковать можно только от пользователей, выдавших `threads_basic` и `threads_content_publish`. Статистика дополнительно требует `threads_manage_insights`.
 
 Таймаут или обрыв сети на `threads_publish` не повторяется автоматически. Контейнер в `FINISHED` после уже отправленного запроса требует ручного повтора. Повтор использует тот же контейнер и тот же текст.
 

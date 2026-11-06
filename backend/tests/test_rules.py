@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from acwa.content.prompt import PROMPT_VERSION, build_prompt
-from acwa.content.validate import validate_post_text
+from acwa.content.validate import normalize_topic_tag, validate_post_text
 from acwa.domain.campaign_rules import campaign_field_errors
 from acwa.domain.status import InvalidTransition, PostStatus, transition
 from acwa.integrations.types import should_refresh_token
@@ -64,6 +64,14 @@ def test_validation_respects_campaign_flags() -> None:
         forbidden="гарантия дохода",
     )
     assert len(errors) == 4
+
+
+def test_topic_tag_follows_threads_limits() -> None:
+    assert normalize_topic_tag("  #книги ") == ("книги", None)
+    assert normalize_topic_tag("") == (None, None)
+    assert normalize_topic_tag("a.b")[1]
+    assert normalize_topic_tag("a&b")[1]
+    assert normalize_topic_tag("x" * 51)[1]
 
 
 def test_campaign_requires_iana_zone_and_defaults_are_not_all_mandatory() -> None:

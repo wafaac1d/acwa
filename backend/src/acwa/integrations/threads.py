@@ -20,6 +20,7 @@ from acwa.integrations.types import (
     ErrorKind,
     IntegrationError,
     MediaInfo,
+    MediaInsights,
     PublishingLimit,
     PublishResult,
     ThreadsProfile,
@@ -43,13 +44,23 @@ class ThreadsGateway(Protocol):
 
     def publishing_limit(self, user_id: str, access_token: str) -> PublishingLimit: ...
 
-    def create_text_container(self, user_id: str, access_token: str, text: str) -> str: ...
+    def create_text_container(
+        self,
+        user_id: str,
+        access_token: str,
+        text: str,
+        *,
+        reply_to_id: str | None = None,
+        topic_tag: str | None = None,
+    ) -> str: ...
 
     def get_container(self, container_id: str, access_token: str) -> ContainerInfo: ...
 
     def publish_container(self, user_id: str, access_token: str, container_id: str) -> PublishResult: ...
 
     def list_recent_posts(self, user_id: str, access_token: str) -> list[MediaInfo]: ...
+
+    def media_insights(self, media_id: str, access_token: str) -> MediaInsights: ...
 
 
 class ThreadsClient:
@@ -147,11 +158,24 @@ class ThreadsClient:
             quota_duration=duration if isinstance(duration, int) else 86400,
         )
 
-    def create_text_container(self, user_id: str, access_token: str, text: str) -> str:
+    def create_text_container(
+        self,
+        user_id: str,
+        access_token: str,
+        text: str,
+        *,
+        reply_to_id: str | None = None,
+        topic_tag: str | None = None,
+    ) -> str:
+        form = {"media_type": "TEXT", "text": text, "access_token": access_token}
+        if reply_to_id:
+            form["reply_to_id"] = reply_to_id
+        if topic_tag:
+            form["topic_tag"] = topic_tag
         response = self._request(
             "POST",
             f"/v1.0/{user_id}/threads",
-            data={"media_type": "TEXT", "text": text, "access_token": access_token},
+            data=form,
             ambiguous=False,
         )
         body = _object(response)
@@ -219,6 +243,46 @@ class ThreadsClient:
                 )
             )
         return items
+
+    def media_insights(self, media_id: str, access_token: str) -> MediaInsights:
+        response = self._request(
+            "GET",
+            f"/v1.0/{media_id}/insights",
+            params={
+                "metric": "views,likes,replies,reposts,quotes,shares",
+                "access_token": access_token,
+            },
+            ambiguous=False,
+        )
+        body = _object(response)
+        data = body.get("data")
+        if not isinstance(data, list):
+            raise IntegrationError(ErrorKind.TRANSIENT, "Threads не вернул статистику поста")
+        values: dict[str, int] = {}
+        for row in data:
+            if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+                continue
+            raw_values = row.get("values")
+            if not isinstance(raw_values, list) or not raw_values or not isinstance(raw_values[0], dict):
+                continue
+            metric_value = raw_values[0].get("value")
+            if type(metric_value) is int and row["name"] in {
+                "views",
+                "likes",
+                "replies",
+                "reposts",
+                "quotes",
+                "shares",
+            }:
+                values[row["name"]] = metric_value
+        return MediaInsights(
+            views=values.get("views"),
+            likes=values.get("likes"),
+            replies=values.get("replies"),
+            reposts=values.get("reposts"),
+            quotes=values.get("quotes"),
+            shares=values.get("shares"),
+        )
 
     def _require_app(self) -> None:
         if not self._settings.threads_app_id or not self._settings.threads_app_secret:

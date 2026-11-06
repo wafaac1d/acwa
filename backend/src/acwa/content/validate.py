@@ -1,6 +1,8 @@
 from acwa.config import THREADS_TEXT_LIMIT
 from acwa.content.length import contains_emoji, contains_hashtag, contains_link, threads_length
 
+TOPIC_TAG_LIMIT = 50
+
 
 def validate_post_text(
     text: str,
@@ -30,6 +32,26 @@ def validate_post_text(
         if phrase.casefold() in cleaned.casefold():
             errors.append(f"Текст содержит запрещённое выражение: {phrase}")
     return errors
+
+
+def normalize_topic_tag(value: object) -> tuple[str | None, str | None]:
+    """Return a Threads topic_tag or an error. Blank means no tag.
+
+    Official limits: 1–50 characters, periods and ampersands are rejected.
+    A leading # is stripped because the parameter is the tag text, not a hashtag.
+    """
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, "Тема Threads должна быть текстом"
+    cleaned = value.strip().removeprefix("#").strip()
+    if not cleaned:
+        return None, None
+    if len(cleaned) > TOPIC_TAG_LIMIT:
+        return None, f"Тема Threads не длиннее {TOPIC_TAG_LIMIT} символов"
+    if any(char in cleaned for char in ".&\n\r\t"):
+        return None, "В теме Threads нельзя использовать точку, амперсанд и переносы строки"
+    return cleaned, None
 
 
 def _forbidden_phrases(forbidden: str) -> list[str]:

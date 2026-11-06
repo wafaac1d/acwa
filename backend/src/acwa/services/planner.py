@@ -134,6 +134,7 @@ def _create_slot_post(
         origin=PostOrigin.SCHEDULE,
         status=PostStatus.GENERATING,
         scheduled_for=slot,
+        topic_tag=campaign.threads_topic_tag,
         created_at=now,
         updated_at=now,
     )

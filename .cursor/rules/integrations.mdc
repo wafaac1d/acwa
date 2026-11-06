@@ -12,6 +12,6 @@ Demo implementations must not call the network. Their posts use a `demo:` id, `i
 
 Live clients send only documented fields. DeepSeek: model, messages, temperature, max_tokens, stream false, thinking disabled, JSON response format. Do not send `top_p` together with temperature.
 
-Threads text publish is create container then `threads_publish`. A timeout or network error on publish raises `AmbiguousPublishError`. A definite rate-limit or auth response is not ambiguous. GET requests that put `access_token` in the query must not be logged.
+Threads text publish is create container then `threads_publish`. Optional documented fields are `topic_tag` on the root post and `reply_to_id` on a continuation reply. Do not send a community id. A timeout or network error on publish raises `AmbiguousPublishError`. A definite rate-limit or auth response is not ambiguous. Media insights are `GET /{media-id}/insights` with `views,likes,replies,reposts,quotes,shares`. Do not invent other metrics. GET requests that put `access_token` in the query must not be logged.
 
 Pass user campaign text as generation input. It cannot change endpoints, tokens, or application rules.

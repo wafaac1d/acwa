@@ -3,12 +3,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiRequestError, type Attempt, type Post } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { postStatusLabel } from "@/lib/labels";
 
 export function PostCard({ post }: { post: Post }) {
   const queryClient = useQueryClient();
   const [text, setText] = useState(post.text ?? "");
+  const [replyText, setReplyText] = useState(post.reply_text ?? "");
+  const [topicTag, setTopicTag] = useState(post.topic_tag ?? "");
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState<Attempt[] | null>(null);
   const refresh = async () => {
@@ -20,7 +22,10 @@ export function PostCard({ post }: { post: Post }) {
     mutationFn: async (action: "approve" | "reject" | "cancel" | "retry" | "regenerate" | "save") => {
       setError(null);
       if (action === "save") {
-        return api<Post>(`/api/posts/${post.id}`, { method: "PATCH", body: JSON.stringify({ text }) });
+        return api<Post>(`/api/posts/${post.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ text, reply_text: replyText, topic_tag: topicTag }),
+        });
       }
       return api<Post>(`/api/posts/${post.id}/${action}`, { method: "POST" });
     },
@@ -44,6 +49,39 @@ export function PostCard({ post }: { post: Post }) {
         />
       ) : (
         <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{post.text || "Текст ещё не готов"}</p>
+      )}
+      {editable ? (
+        <>
+          <label className="mt-3 block text-sm font-semibold">
+            Продолжение в комментарии
+            <Textarea
+              aria-label="Продолжение в комментарии"
+              className="mt-1 font-normal"
+              value={replyText}
+              onChange={(event) => setReplyText(event.target.value)}
+            />
+          </label>
+          <label className="mt-3 block text-sm font-semibold">
+            Тег Threads
+            <Input
+              aria-label="Тег Threads"
+              className="mt-1 font-normal"
+              value={topicTag}
+              onChange={(event) => setTopicTag(event.target.value)}
+              placeholder="Пусто — без темы"
+            />
+          </label>
+          <p className="mt-1 text-xs text-stone-600">
+            Пустое продолжение не публикуется. Тег уходит как тема Threads. Сообщество API не принимает.
+          </p>
+        </>
+      ) : (
+        <>
+          {post.reply_text && (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6">Комментарий: {post.reply_text}</p>
+          )}
+          {post.topic_tag && <p className="mt-2 text-sm">Тема Threads: {post.topic_tag}</p>}
+        </>
       )}
       <dl className="mt-3 grid gap-1 text-xs text-stone-600 sm:grid-cols-2">
         <div>Часовой пояс: {post.timezone}</div>
@@ -88,9 +126,12 @@ export function PostCard({ post }: { post: Post }) {
             Перегенерировать
           </Button>
         )}
-        {["FAILED", "UNKNOWN"].includes(post.status) && (
+        {(["FAILED", "UNKNOWN"].includes(post.status) ||
+          Boolean(post.external_id && post.reply_text && !post.reply_external_id && post.last_error)) && (
           <Button onClick={() => run.mutate("retry")} disabled={run.isPending}>
-            Повторить публикацию
+            {post.external_id && post.reply_text && !post.reply_external_id
+              ? "Повторить комментарий"
+              : "Повторить публикацию"}
           </Button>
         )}
         {!["PUBLISHED", "PUBLISHING"].includes(post.status) && (

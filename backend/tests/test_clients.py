@@ -120,3 +120,76 @@ def test_threads_text_container_uses_documented_form() -> None:
 
     client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
     assert client.create_text_container("42", "secret-token", "Текст") == "c1"
+
+
+def test_threads_container_sends_topic_and_reply_only_when_set() -> None:
+    from urllib.parse import parse_qs
+
+    captured: dict[str, list[str]] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.clear()
+        captured.update(parse_qs(request.content.decode()))
+        return httpx.Response(200, json={"id": "c2"})
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    client.create_text_container("42", "secret-token", "Ответ", reply_to_id="root-id", topic_tag="книги")
+    assert captured["reply_to_id"] == ["root-id"]
+    assert captured["topic_tag"] == ["книги"]
+    assert captured["media_type"] == ["TEXT"]
+
+
+def test_threads_media_insights_reads_documented_metrics() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/v1.0/media-1/insights"
+        assert request.url.params["metric"] == "views,likes,replies,reposts,quotes,shares"
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"name": "views", "period": "lifetime", "values": [{"value": 11}]},
+                    {"name": "likes", "period": "lifetime", "values": [{"value": 2}]},
+                    {"name": "replies", "period": "lifetime", "values": [{"value": 1}]},
+                    {"name": "reposts", "period": "lifetime", "values": [{"value": 0}]},
+                    {"name": "quotes", "period": "lifetime", "values": [{"value": 0}]},
+                    {"name": "shares", "period": "lifetime", "values": [{"value": 4}]},
+                    {"name": "clicks", "period": "lifetime", "values": [{"value": 99}]},
+                    {"name": "views", "period": "lifetime", "values": [{"value": True}]},
+                ]
+            },
+        )
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    result = client.media_insights("media-1", "secret-token")
+    assert result.views == 11
+    assert result.likes == 2
+    assert result.replies == 1
+    assert result.reposts == 0
+    assert result.quotes == 0
+    assert result.shares == 4
+
+
+def test_threads_media_insights_accepts_an_empty_list() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json={"data": []})
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    result = client.media_insights("media-1", "secret-token")
+    assert result.views is None
+    assert result.likes is None
+    assert result.shares is None
+
+
+def test_threads_media_insights_error_does_not_keep_the_token() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": {"message": "permission", "code": 10, "type": "OAuthException"}})
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    try:
+        client.media_insights("media-1", "secret-token")
+    except IntegrationError as exc:
+        assert "secret-token" not in exc.message
+        return
+    raise AssertionError("expected insights error")

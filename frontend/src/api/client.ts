@@ -9,6 +9,7 @@ export type CampaignInput = components["schemas"]["CampaignWrite"];
 export type Post = components["schemas"]["PostRead"];
 export type Attempt = components["schemas"]["AttemptRead"];
 export type Dashboard = components["schemas"]["DashboardRead"];
+export type YesterdayInsights = components["schemas"]["YesterdayInsights"];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export class ApiRequestError extends Error {

@@ -73,6 +73,16 @@ class MediaInfo:
 
 
 @dataclass(frozen=True)
+class MediaInsights:
+    views: int | None = None
+    likes: int | None = None
+    replies: int | None = None
+    reposts: int | None = None
+    quotes: int | None = None
+    shares: int | None = None
+
+
+@dataclass(frozen=True)
 class PublishingLimit:
     quota_usage: int
     quota_total: int

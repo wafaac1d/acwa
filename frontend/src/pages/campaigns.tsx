@@ -4,6 +4,7 @@ import { api, type Page, type CampaignSummary } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { TimeLeft } from "@/components/time-left";
 import { campaignStatusLabel } from "@/lib/labels";
 
 export function CampaignsPage() {
@@ -40,7 +41,14 @@ export function CampaignsPage() {
                 <p className="mt-2 text-sm text-stone-600">
                   {campaign.publish_mode === "manual" ? "Ручное подтверждение" : "Автопубликация"} ·{" "}
                   {campaign.timezone}
-                  {campaign.next_slot ? ` · следующий слот ${campaign.next_slot.local_time}` : ""}
+                  {campaign.next_slot ? (
+                    <>
+                      {" "}
+                      · следующий пост {campaign.next_slot.local_time} · <TimeLeft at={campaign.next_slot.scheduled_for} />
+                    </>
+                  ) : (
+                    ""
+                  )}
                 </p>
               </Link>
             </li>

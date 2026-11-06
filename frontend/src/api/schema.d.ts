@@ -228,6 +228,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/campaigns/{campaign_id}/insights/yesterday": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Yesterday Insights */
+        get: operations["read_yesterday_insights_api_campaigns__campaign_id__insights_yesterday_get"];
+        put?: never;
+        /** Collect Insights */
+        post: operations["collect_insights_api_campaigns__campaign_id__insights_yesterday_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/campaigns/{campaign_id}/trial": {
         parameters: {
             query?: never;
@@ -523,6 +541,8 @@ export interface components {
             starts_on: string;
             /** Ends On */
             ends_on: string | null;
+            /** Threads Topic Tag */
+            threads_topic_tag: string | null;
             /** Status */
             status: string;
             /** Schedule Cursor */
@@ -668,6 +688,11 @@ export interface components {
             /** Ends On */
             ends_on?: string | null;
             /**
+             * Threads Topic Tag
+             * @default
+             */
+            threads_topic_tag: string;
+            /**
              * Activate
              * @default false
              */
@@ -742,6 +767,21 @@ export interface components {
              */
             public_deployment_ready: boolean;
         };
+        /** InsightMetrics */
+        InsightMetrics: {
+            /** Views */
+            views?: number | null;
+            /** Likes */
+            likes?: number | null;
+            /** Replies */
+            replies?: number | null;
+            /** Reposts */
+            reposts?: number | null;
+            /** Quotes */
+            quotes?: number | null;
+            /** Shares */
+            shares?: number | null;
+        };
         /** OAuthStartRead */
         OAuthStartRead: {
             /** Authorization Url */
@@ -777,6 +817,14 @@ export interface components {
             origin: string;
             /** Text */
             text: string | null;
+            /** Reply Text */
+            reply_text: string | null;
+            /** Topic Tag */
+            topic_tag: string | null;
+            /** Reply External Id */
+            reply_external_id: string | null;
+            /** Reply Permalink */
+            reply_permalink: string | null;
             /** Status */
             status: string;
             /** Scheduled For */
@@ -832,6 +880,10 @@ export interface components {
         PostTextUpdate: {
             /** Text */
             text: string;
+            /** Reply Text */
+            reply_text?: string | null;
+            /** Topic Tag */
+            topic_tag?: string | null;
         };
         /** SettingsRead */
         SettingsRead: {
@@ -917,6 +969,44 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** YesterdayInsights */
+        YesterdayInsights: {
+            /** Date */
+            date: string;
+            /** Timezone */
+            timezone: string;
+            /** Notice */
+            notice: string | null;
+            /** Posts */
+            posts: components["schemas"]["YesterdayPostInsight"][];
+            totals: components["schemas"]["InsightMetrics"];
+        };
+        /** YesterdayPostInsight */
+        YesterdayPostInsight: {
+            /**
+             * Post Id
+             * Format: uuid
+             */
+            post_id: string;
+            /** Text */
+            text: string | null;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            /** Local Time */
+            local_time: string;
+            /** Permalink */
+            permalink: string | null;
+            /** Is Demo Publication */
+            is_demo_publication: boolean;
+            metrics: components["schemas"]["InsightMetrics"] | null;
+            /** Collected At */
+            collected_at: string | null;
+            /** Error */
+            error: string | null;
         };
     };
     responses: never;
@@ -1444,6 +1534,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_yesterday_insights_api_campaigns__campaign_id__insights_yesterday_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YesterdayInsights"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    collect_insights_api_campaigns__campaign_id__insights_yesterday_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YesterdayInsights"];
                 };
             };
             /** @description Validation Error */

@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { api, ApiRequestError, type Account, type Campaign, type CampaignInput, type Page, type Post, type Settings } from "@/api/client";
 import { PostCard } from "@/components/post-card";
+import { TimeLeft } from "@/components/time-left";
+import { YesterdayInsights } from "@/components/yesterday-insights";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -35,6 +37,7 @@ const schema = z.object({
   times_of_day: z.array(z.object({ value: z.string().regex(/^\d{2}:\d{2}$/, "Формат ЧЧ:ММ") })).min(1),
   starts_on: z.string().min(1, "Укажите дату начала"),
   ends_on: z.string(),
+  threads_topic_tag: z.string().max(50, "Тема Threads не длиннее 50 символов"),
   activate: z.boolean(),
 });
 
@@ -88,6 +91,11 @@ export function CampaignEditorPage() {
   }, [accountId, campaignId, form]);
   const times = useFieldArray({ control: form.control, name: "times_of_day" });
   const [formError, setFormError] = useState<string | null>(null);
+  const [placement, setPlacement] = useState<"none" | "topic" | "community">("none");
+  useEffect(() => {
+    if (!campaign.data) return;
+    setPlacement(campaign.data.threads_topic_tag ? "topic" : "none");
+  }, [campaign.data]);
   const save = useMutation({
     mutationFn: (values: FormValues) => {
       const payload: CampaignInput = {
@@ -133,6 +141,7 @@ export function CampaignEditorPage() {
   if (accounts.isError || campaign.isError) return <ErrorState message="Не удалось открыть редактор" />;
   const timezone = form.watch("timezone");
   return (
+    <>
     <form className="space-y-6" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -176,6 +185,34 @@ export function CampaignEditorPage() {
         <Field label="Тема" error={form.formState.errors.topic?.message}>
           <Input {...form.register("topic")} />
         </Field>
+        <Field label="Куда публиковать">
+          <select
+            className="w-full rounded-2xl border border-line px-3 py-2"
+            value={placement}
+            onChange={(event) => {
+              const next = event.target.value as "none" | "topic" | "community";
+              setPlacement(next);
+              if (next !== "topic") form.setValue("threads_topic_tag", "");
+            }}
+          >
+            <option value="none">Не добавлять метку</option>
+            <option value="topic">Тема Threads</option>
+            <option value="community">Сообщество</option>
+          </select>
+        </Field>
+        {placement === "topic" && (
+          <Field label="Название темы" error={form.formState.errors.threads_topic_tag?.message}>
+            <Input {...form.register("threads_topic_tag")} placeholder="книги" />
+          </Field>
+        )}
+        {placement === "community" && (
+          <p className="text-sm text-stone-700">
+            Официальный Threads API не принимает публикацию в сообщество. Выберите тему: она уйдёт параметром topic_tag.
+          </p>
+        )}
+        {placement === "topic" && (
+          <p className="text-sm text-stone-600">От 1 до 50 символов, без точки и символа &.</p>
+        )}
         <Field label="Контекст" error={form.formState.errors.context?.message}>
           <Textarea {...form.register("context")} />
         </Field>
@@ -258,8 +295,11 @@ export function CampaignEditorPage() {
         <p className="text-sm leading-6 text-stone-700">{settings.data?.unapproved_policy}</p>
         {campaign.data && campaign.data.upcoming.length > 0 && (
           <ul className="text-sm">
-            {campaign.data.upcoming.map((slot) => (
-              <li key={slot.scheduled_for}>Ближайший слот: {slot.local_time} ({slot.timezone})</li>
+            {campaign.data.upcoming.map((slot, index) => (
+              <li key={slot.scheduled_for}>
+                {index === 0 ? "Ближайший пост" : "Следующий слот"}: {slot.local_time} ({slot.timezone}) ·{" "}
+                <TimeLeft at={slot.scheduled_for} />
+              </li>
             ))}
           </ul>
         )}
@@ -280,10 +320,16 @@ export function CampaignEditorPage() {
             <h3 className="font-serif text-2xl">Пробный пост</h3>
             <Button type="button" onClick={() => trial.mutate()} disabled={trial.isPending}>Сгенерировать</Button>
           </div>
-          {trials.data?.items[0] ? <PostCard post={trials.data.items[0]} /> : <p className="text-sm">Пробных постов ещё нет.</p>}
+          {trials.data?.items[0] ? (
+            <PostCard key={trials.data.items[0].id} post={trials.data.items[0]} />
+          ) : (
+            <p className="text-sm">Пробных постов ещё нет.</p>
+          )}
         </section>
       )}
     </form>
+    {!isNew && campaignId && <YesterdayInsights campaignId={campaignId} />}
+    </>
   );
 }
 
@@ -322,6 +368,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
       times_of_day: [{ value: "10:00" }],
       starts_on: todayISO(),
       ends_on: "",
+      threads_topic_tag: "",
       activate: false,
     };
   }
@@ -348,6 +395,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
     times_of_day: campaign.times_of_day.map((value) => ({ value })),
     starts_on: campaign.starts_on,
     ends_on: campaign.ends_on ?? "",
+    threads_topic_tag: campaign.threads_topic_tag ?? "",
     activate: campaign.status === "active",
   };
 }

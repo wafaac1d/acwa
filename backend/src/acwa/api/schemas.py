@@ -115,6 +115,7 @@ class CampaignWrite(BaseModel):
     times_of_day: list[str] = Field(default_factory=lambda: ["10:00"])
     starts_on: date
     ends_on: date | None = None
+    threads_topic_tag: str = ""
     activate: bool = False
 
 
@@ -142,6 +143,7 @@ class CampaignRead(BaseModel):
     times_of_day: list[str]
     starts_on: date
     ends_on: date | None
+    threads_topic_tag: str | None
     status: str
     schedule_cursor: datetime | None
     created_at: datetime
@@ -169,6 +171,10 @@ class PostRead(BaseModel):
     campaign_name: str
     origin: str
     text: str | None
+    reply_text: str | None
+    topic_tag: str | None
+    reply_external_id: str | None
+    reply_permalink: str | None
     status: str
     scheduled_for: datetime | None
     scheduled_local_time: str | None
@@ -194,6 +200,8 @@ class PostRead(BaseModel):
 
 class PostTextUpdate(BaseModel):
     text: str
+    reply_text: str | None = None
+    topic_tag: str | None = None
 
 
 class AttemptRead(BaseModel):
@@ -224,6 +232,35 @@ class PostPage(BaseModel):
 class AccountPage(BaseModel):
     items: list[AccountRead]
     next_cursor: str | None
+
+
+class InsightMetrics(BaseModel):
+    views: int | None = None
+    likes: int | None = None
+    replies: int | None = None
+    reposts: int | None = None
+    quotes: int | None = None
+    shares: int | None = None
+
+
+class YesterdayPostInsight(BaseModel):
+    post_id: UUID
+    text: str | None
+    published_at: datetime
+    local_time: str
+    permalink: str | None
+    is_demo_publication: bool
+    metrics: InsightMetrics | None
+    collected_at: datetime | None
+    error: str | None
+
+
+class YesterdayInsights(BaseModel):
+    date: str
+    timezone: str
+    notice: str | None
+    posts: list[YesterdayPostInsight]
+    totals: InsightMetrics
 
 
 class DashboardRead(BaseModel):

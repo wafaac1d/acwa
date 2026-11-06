@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from acwa.clock import Clock
 from acwa.config import Settings
 from acwa.content.prompt import build_prompt
-from acwa.content.validate import validate_post_text
+from acwa.content.validate import normalize_topic_tag, validate_post_text
 from acwa.domain.status import (
     CampaignStatus,
     JobKind,
@@ -48,6 +48,7 @@ def request_trial(session: Session, campaign: Campaign, clock: Clock, settings: 
         account_id=campaign.account_id,
         origin=PostOrigin.TRIAL,
         status=PostStatus.GENERATING,
+        topic_tag=campaign.threads_topic_tag,
         created_at=now,
         updated_at=now,
     )
@@ -71,6 +72,13 @@ def approve_post(session: Session, post: Post, clock: Clock, settings: Settings)
     errors = _errors_for_post(session, post, post.text)
     if errors:
         raise ApiError(422, "validation_error", errors[0], {"text": errors[0]})
+    if post.reply_text:
+        reply_errors = _errors_for_post(session, post, post.reply_text)
+        if reply_errors:
+            raise ApiError(422, "validation_error", reply_errors[0], {"reply_text": reply_errors[0]})
+    _, tag_error = normalize_topic_tag(post.topic_tag)
+    if tag_error:
+        raise ApiError(422, "validation_error", tag_error, {"topic_tag": tag_error})
     now = clock.now()
     post.approved_at = now
     run_at = post.scheduled_for if post.scheduled_for and post.scheduled_for > now else now
@@ -100,7 +108,15 @@ def reject_post(session: Session, post: Post, clock: Clock) -> Post:
     return post
 
 
-def update_post_text(session: Session, post: Post, text: str, clock: Clock) -> Post:
+def update_post_text(
+    session: Session,
+    post: Post,
+    text: str,
+    clock: Clock,
+    *,
+    reply_text: str | None = None,
+    topic_tag: str | None = None,
+) -> Post:
     if post.status not in {
         PostStatus.DRAFT,
         PostStatus.PENDING_APPROVAL,
@@ -110,11 +126,24 @@ def update_post_text(session: Session, post: Post, text: str, clock: Clock) -> P
         raise ApiError(409, "invalid_state", "Этот пост уже нельзя редактировать")
     if post.publish_dispatched_at is not None:
         raise ApiError(409, "already_sent", "Запрос публикации уже отправлялся, текст менять нельзя")
+    fields: dict[str, str] = {}
     errors = _errors_for_post(session, post, text)
     if errors:
-        raise ApiError(422, "validation_error", "Текст не проходит ограничения", {"text": " ".join(errors)})
+        fields["text"] = " ".join(errors)
+    reply = (reply_text or "").strip()
+    if reply:
+        reply_errors = _errors_for_post(session, post, reply)
+        if reply_errors:
+            fields["reply_text"] = " ".join(reply_errors)
+    tag, tag_error = normalize_topic_tag(topic_tag)
+    if tag_error:
+        fields["topic_tag"] = tag_error
+    if fields:
+        raise ApiError(422, "validation_error", "Текст не проходит ограничения", fields)
     now = clock.now()
     post.text = text.strip()
+    post.reply_text = reply or None
+    post.topic_tag = tag
     post.updated_at = now
     if post.status == PostStatus.FAILED:
         post.status = PostStatus.PENDING_APPROVAL
@@ -145,6 +174,25 @@ def regenerate_post(session: Session, post: Post, clock: Clock, settings: Settin
 
 
 def retry_publish(session: Session, post: Post, clock: Clock, settings: Settings) -> Post:
+    if post.external_id and _reply_pending(post):
+        if post.status not in {PostStatus.FAILED, PostStatus.UNKNOWN, PostStatus.PUBLISHED}:
+            raise ApiError(409, "invalid_state", "Повторить комментарий можно после публикации основного поста")
+        reply_errors = _errors_for_post(session, post, post.reply_text or "")
+        if reply_errors:
+            raise ApiError(422, "validation_error", reply_errors[0], {"reply_text": reply_errors[0]})
+        now = clock.now()
+        post.reply_allow_republish = True
+        post.last_error = None
+        post.error_kind = None
+        post.updated_at = now
+        enqueue_job(
+            session,
+            post_id=post.id,
+            kind=JobKind.PUBLISH,
+            run_at=now,
+            max_attempts=settings.max_publish_attempts,
+        )
+        return post
     if post.status not in {PostStatus.FAILED, PostStatus.UNKNOWN}:
         raise ApiError(409, "invalid_state", "Повторить публикацию можно для ошибки или неясного результата")
     if not post.text:
@@ -304,7 +352,16 @@ def run_publish(
     settings: Settings,
 ) -> None:
     post = session.get(Post, post_id)
-    if post is None or post.status in {PostStatus.CANCELLED, PostStatus.PUBLISHED}:
+    if post is None or post.status == PostStatus.CANCELLED:
+        return
+    if post.status == PostStatus.PUBLISHED and not _reply_pending(post):
+        return
+    if post.external_id and _reply_pending(post):
+        _publish_reply(session, post_id, threads=threads, cipher=cipher, clock=clock, settings=settings)
+        return
+    if post.external_id:
+        _mark_published(post, clock.now(), post.permalink, post.is_demo_publication)
+        session.commit()
         return
     campaign = session.get(Campaign, post.campaign_id)
     account = session.get(ThreadsAccount, post.account_id)
@@ -332,10 +389,6 @@ def run_publish(
         post.status = PostStatus.FAILED
         post.last_error = "Демонстрационный аккаунт нельзя использовать для настоящей публикации"
         post.error_kind = ErrorKind.PERMANENT
-        session.commit()
-        return
-    if post.external_id:
-        _mark_published(post, now, post.permalink, post.is_demo_publication)
         session.commit()
         return
     if account.status != "connected":
@@ -369,6 +422,9 @@ def run_publish(
         if info.status == "PUBLISHED":
             _match_published(post, threads, account, token, clock)
             session.commit()
+            matched = _reload(session, post_id)
+            if matched.external_id and _reply_pending(matched):
+                _publish_reply(session, post_id, threads=threads, cipher=cipher, clock=clock, settings=settings)
             return
         if info.status in {"ERROR", "EXPIRED"}:
             post.status = PostStatus.FAILED
@@ -393,7 +449,12 @@ def run_publish(
         post.status = PostStatus.PUBLISHING
         post.updated_at = clock.now()
         session.commit()
-        container_id = threads.create_text_container(account.threads_user_id or "", token, post.text)
+        container_id = threads.create_text_container(
+            account.threads_user_id or "",
+            token,
+            post.text,
+            topic_tag=post.topic_tag,
+        )
         post = _reload(session, post_id)
         post.container_id = container_id
         post.container_status = "FINISHED"
@@ -462,9 +523,193 @@ def run_publish(
     post.permalink = result.permalink
     post.is_demo_publication = result.is_demo
     post.container_status = "PUBLISHED"
-    _mark_published(post, clock.now(), result.permalink, result.is_demo)
     _attempt(session, post.id, "publish", started, clock.now(), "success", None, None)
+    if _reply_pending(post):
+        session.commit()
+        _publish_reply(session, post_id, threads=threads, cipher=cipher, clock=clock, settings=settings)
+        return
+    _mark_published(post, clock.now(), result.permalink, result.is_demo)
     session.commit()
+
+
+def _reply_pending(post: Post) -> bool:
+    return bool(post.reply_text and post.reply_text.strip()) and not post.reply_external_id
+
+
+def _publish_reply(
+    session: Session,
+    post_id: uuid.UUID,
+    *,
+    threads: ThreadsGateway,
+    cipher: TokenCipher,
+    clock: Clock,
+    settings: Settings,
+) -> None:
+    post = _reload(session, post_id)
+    account = session.get(ThreadsAccount, post.account_id)
+    if account is None or not post.external_id or not post.reply_text:
+        return
+    try:
+        token = _token(session, account, threads, cipher, clock)
+    except IntegrationError as exc:
+        _keep_root_published(post, clock.now(), redact(exc.message), exc.kind)
+        if exc.kind == ErrorKind.AUTH:
+            account.status = "needs_reauth"
+            account.last_error = post.last_error
+        session.commit()
+        if exc.kind == ErrorKind.AUTH:
+            return
+        raise
+
+    if post.reply_container_id:
+        try:
+            info = threads.get_container(post.reply_container_id, token)
+        except IntegrationError:
+            session.commit()
+            raise
+        if info.status == "PUBLISHED":
+            _match_reply(post, threads, account, token, clock)
+            session.commit()
+            return
+        if info.status in {"ERROR", "EXPIRED"}:
+            post.reply_container_id = None
+            post.reply_publish_dispatched_at = None
+            _keep_root_published(
+                post,
+                clock.now(),
+                info.error_message or f"Контейнер комментария в состоянии {info.status}",
+                ErrorKind.PERMANENT,
+            )
+            session.commit()
+            return
+        if info.status == "IN_PROGRESS":
+            session.commit()
+            raise Postpone(
+                timedelta(seconds=settings.container_wait_seconds),
+                "Контейнер комментария ещё обрабатывается",
+            )
+        if info.status == "FINISHED" and post.reply_publish_dispatched_at and not post.reply_allow_republish:
+            _keep_root_published(post, clock.now(), SAFE_REPLY_MESSAGE, ErrorKind.AMBIGUOUS)
+            session.commit()
+            return
+    else:
+        post.status = PostStatus.PUBLISHING
+        post.updated_at = clock.now()
+        session.commit()
+        container_id = threads.create_text_container(
+            account.threads_user_id or "",
+            token,
+            post.reply_text,
+            reply_to_id=post.external_id,
+        )
+        post = _reload(session, post_id)
+        post.reply_container_id = container_id
+        session.commit()
+
+    post = _reload(session, post_id)
+    account = session.get(ThreadsAccount, post.account_id)
+    if account is None or post.reply_container_id is None or post.reply_text is None:
+        return
+    token = _token(session, account, threads, cipher, clock)
+    post.status = PostStatus.PUBLISHING
+    post.reply_publish_dispatched_at = clock.now()
+    post.reply_allow_republish = False
+    post.attempt_count += 1
+    post.updated_at = clock.now()
+    session.commit()
+    started = clock.now()
+    try:
+        result = threads.publish_container(account.threads_user_id or "", token, post.reply_container_id)
+    except AmbiguousPublishError as exc:
+        post = _reload(session, post_id)
+        _keep_root_published(post, clock.now(), redact(str(exc)), ErrorKind.AMBIGUOUS)
+        _attempt(session, post.id, "reply", started, clock.now(), "ambiguous", post.last_error, None)
+        enqueue_job(
+            session,
+            post_id=post.id,
+            kind=JobKind.RECONCILE,
+            run_at=clock.now() + timedelta(seconds=settings.container_wait_seconds),
+            max_attempts=settings.max_publish_attempts,
+        )
+        session.commit()
+        return
+    except IntegrationError as exc:
+        post = _reload(session, post_id)
+        account = session.get(ThreadsAccount, post.account_id)
+        message = redact(exc.message)
+        _attempt(session, post.id, "reply", started, clock.now(), "failed", message, exc.http_status)
+        if exc.kind == ErrorKind.AUTH and account is not None:
+            account.status = "needs_reauth"
+            account.last_error = message
+            _keep_root_published(post, clock.now(), message, exc.kind)
+            session.commit()
+            return
+        if exc.kind == ErrorKind.RATE_LIMIT:
+            post.reply_publish_dispatched_at = None
+            post.status = PostStatus.PUBLISHING
+            post.last_error = message
+            post.error_kind = exc.kind
+            post.updated_at = clock.now()
+            session.commit()
+            raise
+        if exc.kind == ErrorKind.PERMANENT:
+            _keep_root_published(post, clock.now(), message, exc.kind)
+            session.commit()
+            return
+        post.status = PostStatus.PUBLISHING
+        post.last_error = message
+        post.error_kind = exc.kind
+        session.commit()
+        raise
+    post = _reload(session, post_id)
+    post.reply_external_id = result.media_id
+    post.reply_permalink = result.permalink
+    post.is_demo_publication = post.is_demo_publication or result.is_demo
+    _mark_published(post, clock.now(), post.permalink, post.is_demo_publication)
+    _attempt(session, post.id, "reply", started, clock.now(), "success", None, None)
+    session.commit()
+
+
+def _keep_root_published(post: Post, now: datetime, message: str, kind: str) -> None:
+    _mark_published(post, now, post.permalink, post.is_demo_publication)
+    post.last_error = message
+    post.error_kind = kind
+    post.updated_at = now
+
+
+SAFE_REPLY_MESSAGE = (
+    "Запрос комментария уже отправлялся, а Threads не подтвердил его. "
+    "Автоматический повтор остановлен. Если комментария в ветке нет, подтвердите повтор: "
+    "будет отправлен тот же текст."
+)
+
+
+def _match_reply(
+    post: Post,
+    threads: ThreadsGateway,
+    account: ThreadsAccount,
+    token: str,
+    clock: Clock,
+) -> None:
+    if account.threads_user_id is None or post.reply_text is None:
+        _keep_root_published(post, clock.now(), SAFE_REPLY_MESSAGE, ErrorKind.AMBIGUOUS)
+        return
+    recent = threads.list_recent_posts(account.threads_user_id, token)
+    for item in recent:
+        if item.media_id == post.external_id or item.text != post.reply_text:
+            continue
+        post.reply_external_id = item.media_id
+        post.reply_permalink = item.permalink
+        post.is_demo_publication = post.is_demo_publication or item.media_id.startswith("demo:")
+        _mark_published(post, clock.now(), post.permalink, post.is_demo_publication)
+        return
+    _keep_root_published(
+        post,
+        clock.now(),
+        "Threads сообщает, что комментарий уже опубликован, но сопоставить его не удалось. "
+        "Повторная отправка заблокирована.",
+        ErrorKind.AMBIGUOUS,
+    )
 
 
 def _requires_approval(post: Post, campaign: Campaign) -> bool:

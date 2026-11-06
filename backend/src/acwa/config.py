@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     threads_app_secret: str | None = None
     threads_redirect_uri: str = "http://localhost:8000/api/accounts/threads/callback"
     threads_timeout_seconds: float = 30
-    threads_scopes: str = "threads_basic,threads_content_publish"
+    threads_scopes: str = "threads_basic,threads_content_publish,threads_manage_insights"
     threads_publish_quota_fallback: int = 250
 
     frontend_origin: str = "http://localhost:5173"

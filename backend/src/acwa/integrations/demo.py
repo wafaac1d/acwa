@@ -6,6 +6,7 @@ from acwa.integrations.types import (
     ContainerInfo,
     GenerationResult,
     MediaInfo,
+    MediaInsights,
     PublishingLimit,
     PublishResult,
     ThreadsProfile,
@@ -38,6 +39,7 @@ class DemoThreads:
 
     def __init__(self) -> None:
         self.container_text: dict[str, str] = {}
+        self.creates: list[dict[str, str | None]] = []
         self.published_containers: set[str] = set()
         self.media: dict[str, str] = {}
         self.fail_publish_times = 0
@@ -45,6 +47,7 @@ class DemoThreads:
         self.auth_failures = 0
         self.publish_calls = 0
         self.create_calls = 0
+        self.insight_calls = 0
 
     def exchange_code(self, code: str, redirect_uri: str) -> TokenBundle:
         del code, redirect_uri
@@ -71,11 +74,20 @@ class DemoThreads:
         del user_id, access_token
         return PublishingLimit(quota_usage=0, quota_total=250, quota_duration=86400)
 
-    def create_text_container(self, user_id: str, access_token: str, text: str) -> str:
+    def create_text_container(
+        self,
+        user_id: str,
+        access_token: str,
+        text: str,
+        *,
+        reply_to_id: str | None = None,
+        topic_tag: str | None = None,
+    ) -> str:
         del user_id, access_token
         self.create_calls += 1
         container_id = f"demo-container-{uuid.uuid4()}"
         self.container_text[container_id] = text
+        self.creates.append({"text": text, "reply_to_id": reply_to_id, "topic_tag": topic_tag})
         return container_id
 
     def get_container(self, container_id: str, access_token: str) -> ContainerInfo:
@@ -113,6 +125,16 @@ class DemoThreads:
         self.published_containers.add(container_id)
         self.media[media_id] = text
         return PublishResult(media_id=media_id, permalink=None, is_demo=True)
+
+    def media_insights(self, media_id: str, access_token: str) -> MediaInsights:
+        del media_id, access_token
+        self.insight_calls += 1
+        from acwa.integrations.types import ErrorKind, IntegrationError
+
+        raise IntegrationError(
+            ErrorKind.PERMANENT,
+            "Демонстрационный режим не запрашивает статистику Threads.",
+        )
 
     def list_recent_posts(self, user_id: str, access_token: str) -> list[MediaInfo]:
         del user_id, access_token

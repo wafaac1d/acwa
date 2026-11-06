@@ -18,6 +18,7 @@ from acwa.api.schemas import (
     DeepSeekPublic,
     GenerationSettings,
     HealthResponse,
+    InsightMetrics,
     OAuthStartRead,
     PostPage,
     PostRead,
@@ -27,6 +28,8 @@ from acwa.api.schemas import (
     SkippedSlotRead,
     SlotRead,
     ThreadsPublic,
+    YesterdayInsights,
+    YesterdayPostInsight,
 )
 from acwa.clock import Clock
 from acwa.config import PROMPT_VERSION, THREADS_TEXT_LIMIT, Settings
@@ -42,6 +45,7 @@ from acwa.services.accounts import (
     start_oauth,
 )
 from acwa.services.campaigns import archive_campaign, save_campaign, set_active, set_paused, unarchive_campaign
+from acwa.services.insights import INSIGHT_KEYS, collect_yesterday_insights, yesterday_posts
 from acwa.services.pipeline import (
     approve_post,
     cancel_post,
@@ -281,6 +285,37 @@ def unarchive(
     return _campaign_read(session, campaign, clock)
 
 
+@router.get("/campaigns/{campaign_id}/insights/yesterday", response_model=YesterdayInsights)
+def read_yesterday_insights(
+    campaign_id: str,
+    session: Session = Depends(get_session),
+    clock: Clock = Depends(get_clock),
+) -> YesterdayInsights:
+    return _yesterday_read(session, _campaign(session, campaign_id), clock, notice=None)
+
+
+@router.post("/campaigns/{campaign_id}/insights/yesterday", response_model=YesterdayInsights)
+def collect_insights(
+    campaign_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    clock: Clock = Depends(get_clock),
+    cipher: TokenCipher = Depends(get_cipher),
+) -> YesterdayInsights:
+    campaign = _campaign(session, campaign_id)
+    notice = collect_yesterday_insights(
+        session,
+        campaign,
+        threads=request.app.state.threads,
+        cipher=cipher,
+        clock=clock,
+        settings=settings,
+    )
+    session.flush()
+    return _yesterday_read(session, campaign, clock, notice=notice or None)
+
+
 @router.post("/campaigns/{campaign_id}/trial", response_model=PostRead, status_code=202)
 def trial(
     campaign_id: str,
@@ -335,7 +370,14 @@ def edit_post(
     session: Session = Depends(get_session),
     clock: Clock = Depends(get_clock),
 ) -> PostRead:
-    post = update_post_text(session, _post(session, post_id), body.text, clock)
+    post = update_post_text(
+        session,
+        _post(session, post_id),
+        body.text,
+        clock,
+        reply_text=body.reply_text,
+        topic_tag=body.topic_tag,
+    )
     return _post_read(session, post)
 
 
@@ -556,6 +598,7 @@ def _campaign_read(session: Session, campaign: Campaign, clock: Clock) -> Campai
         times_of_day=list(campaign.times_of_day),
         starts_on=campaign.starts_on,
         ends_on=campaign.ends_on,
+        threads_topic_tag=campaign.threads_topic_tag,
         status=campaign.status,
         schedule_cursor=campaign.schedule_cursor,
         created_at=campaign.created_at,
@@ -563,6 +606,52 @@ def _campaign_read(session: Session, campaign: Campaign, clock: Clock) -> Campai
         upcoming=[_slot(item, campaign.timezone) for item in upcoming_for(campaign, clock.now(), 5)],
         skipped=[_skipped(session, row) for row in skipped_rows],
         missed_slot_policy=MISSED_SLOT_POLICY,
+    )
+
+
+def _yesterday_read(session: Session, campaign: Campaign, clock: Clock, notice: str | None) -> YesterdayInsights:
+    label, posts = yesterday_posts(session, campaign, clock)
+    items: list[YesterdayPostInsight] = []
+    sums = {key: 0 for key in INSIGHT_KEYS}
+    seen = {key: False for key in INSIGHT_KEYS}
+    for post in posts:
+        metrics = _insight_metrics(post.insights, post.insights_collected_at)
+        if metrics is not None:
+            for key in INSIGHT_KEYS:
+                value = getattr(metrics, key)
+                if type(value) is int:
+                    sums[key] += value
+                    seen[key] = True
+        published_at = post.published_at
+        assert published_at is not None
+        items.append(
+            YesterdayPostInsight(
+                post_id=post.id,
+                text=post.text,
+                published_at=published_at,
+                local_time=_local(published_at, campaign.timezone),
+                permalink=post.permalink,
+                is_demo_publication=post.is_demo_publication,
+                metrics=metrics,
+                collected_at=post.insights_collected_at,
+                error=post.insights_error,
+            )
+        )
+    return YesterdayInsights(
+        date=label,
+        timezone=campaign.timezone,
+        notice=notice,
+        posts=items,
+        totals=InsightMetrics(**{key: sums[key] if seen[key] else None for key in INSIGHT_KEYS}),
+    )
+
+
+def _insight_metrics(raw: object, collected_at: object) -> InsightMetrics | None:
+    if collected_at is None:
+        return None
+    data = raw if isinstance(raw, dict) else {}
+    return InsightMetrics(
+        **{key: data.get(key) if type(data.get(key)) is int else None for key in INSIGHT_KEYS}
     )
 
 
@@ -578,6 +667,10 @@ def _post_read(session: Session, post: Post) -> PostRead:
         campaign_name=campaign.name if campaign is not None else "",
         origin=post.origin,
         text=post.text,
+        reply_text=post.reply_text,
+        topic_tag=post.topic_tag,
+        reply_external_id=post.reply_external_id,
+        reply_permalink=post.reply_permalink,
         status=post.status,
         scheduled_for=post.scheduled_for,
         scheduled_local_time=_local(post.scheduled_for, timezone) if post.scheduled_for else None,

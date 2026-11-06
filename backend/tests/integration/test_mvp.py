@@ -196,6 +196,125 @@ def test_manual_approval_and_publish_retry_does_not_regenerate(session_factory, 
     session.close()
 
 
+def test_reply_continues_the_thread_and_topic_is_only_on_the_root(session_factory, settings) -> None:
+    session = session_factory()
+    from acwa.security.crypto import TokenCipher
+
+    cipher = TokenCipher(settings.token_encryption_key)
+    clock = FrozenClock(datetime(2026, 1, 5, 12, tzinfo=UTC))
+    account = _account(session, cipher)
+    campaign = _campaign(session, account, publish_mode="automatic")
+    post = Post(
+        campaign_id=campaign.id,
+        account_id=account.id,
+        origin="schedule",
+        status="SCHEDULED",
+        text="Основной текст",
+        reply_text="Продолжение в комментарии",
+        topic_tag="книги",
+        scheduled_for=clock.now(),
+        created_at=clock.now(),
+        updated_at=clock.now(),
+    )
+    session.add(post)
+    session.commit()
+    threads = DemoThreads()
+    run_publish(session, post.id, threads=threads, cipher=cipher, clock=clock, settings=settings)
+    session.refresh(post)
+    assert post.status == "PUBLISHED"
+    assert post.external_id is not None and post.external_id.startswith("demo:")
+    assert post.reply_external_id is not None and post.reply_external_id.startswith("demo:")
+    assert post.permalink is None
+    assert post.reply_permalink is None
+    assert post.is_demo_publication is True
+    assert threads.creates[0]["topic_tag"] == "книги"
+    assert threads.creates[0]["reply_to_id"] is None
+    assert threads.creates[1]["reply_to_id"] == post.external_id
+    assert threads.creates[1]["topic_tag"] is None
+    assert threads.creates[1]["text"] == "Продолжение в комментарии"
+    session.close()
+
+
+def test_yesterday_insights_do_not_call_threads_for_demo(session_factory, settings) -> None:
+    session = session_factory()
+    from acwa.integrations.types import MediaInsights
+    from acwa.security.crypto import TokenCipher
+    from acwa.services.insights import collect_yesterday_insights
+
+    cipher = TokenCipher(settings.token_encryption_key)
+    clock = FrozenClock(datetime(2026, 1, 5, 12, tzinfo=UTC))
+    account = _account(session, cipher)
+    campaign = _campaign(session, account)
+    yesterday = Post(
+        campaign_id=campaign.id,
+        account_id=account.id,
+        origin="schedule",
+        status="PUBLISHED",
+        text="Вчерашний пост",
+        external_id="demo:yesterday",
+        is_demo_publication=True,
+        published_at=datetime(2026, 1, 4, 15, tzinfo=UTC),
+        created_at=clock.now(),
+        updated_at=clock.now(),
+    )
+    today = Post(
+        campaign_id=campaign.id,
+        account_id=account.id,
+        origin="schedule",
+        status="PUBLISHED",
+        text="Сегодняшний пост",
+        external_id="demo:today",
+        is_demo_publication=True,
+        published_at=datetime(2026, 1, 5, 10, tzinfo=UTC),
+        created_at=clock.now(),
+        updated_at=clock.now(),
+    )
+    session.add_all([yesterday, today])
+    session.commit()
+    threads = DemoThreads()
+    notice = collect_yesterday_insights(
+        session, campaign, threads=threads, cipher=cipher, clock=clock, settings=settings
+    )
+    session.refresh(yesterday)
+    assert "не запрашива" in notice
+    assert threads.insight_calls == 0
+    assert yesterday.insights is None
+
+    live = settings.model_copy(update={"integration_mode": "live"})
+    account.is_demo = False
+    account.token_expires_at = datetime(2026, 3, 1, tzinfo=UTC)
+    yesterday.external_id = "1789001"
+    yesterday.is_demo_publication = False
+    session.commit()
+
+    class RecordingThreads(DemoThreads):
+        def media_insights(self, media_id: str, access_token: str) -> MediaInsights:
+            self.insight_calls += 1
+            assert media_id == "1789001"
+            assert access_token == "plain-token-should-not-leak"
+            return MediaInsights(views=10, likes=2, replies=1, reposts=0, quotes=0, shares=3)
+
+    recording = RecordingThreads()
+    notice = collect_yesterday_insights(
+        session, campaign, threads=recording, cipher=cipher, clock=clock, settings=live
+    )
+    session.flush()
+    session.refresh(yesterday)
+    session.refresh(today)
+    assert notice == ""
+    assert recording.insight_calls == 1
+    assert yesterday.insights == {
+        "views": 10,
+        "likes": 2,
+        "replies": 1,
+        "reposts": 0,
+        "quotes": 0,
+        "shares": 3,
+    }
+    assert today.insights is None
+    session.close()
+
+
 def test_ambiguous_timeout_does_not_publish_again(session_factory, settings) -> None:
     session = session_factory()
     from acwa.security.crypto import TokenCipher
