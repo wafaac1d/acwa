@@ -1,0 +1,17 @@
+---
+description: Campaign schedule, DST, and missed slots
+globs: backend/src/acwa/scheduling/**/*.py,backend/src/acwa/services/planner.py,backend/src/acwa/services/worker.py
+alwaysApply: false
+---
+
+# Scheduling
+
+Store local times and an IANA timezone on the campaign. Persist the execution instant in UTC.
+
+Skip a local time that does not exist on a spring-forward day. On a fall-back overlap, use `fold=0` (the earlier offset).
+
+After downtime, publish at most one missed slot, and only inside `missed_slot_grace_seconds`. Record older missed slots and do not burst-publish them. Pause, resume, and schedule edits move `schedule_cursor` to now and cancel unsent schedule posts.
+
+An unapproved post stays pending after its slot. Approving it later publishes immediately. A campaign with an unfinished schedule post does not receive another slot.
+
+The worker is a separate process of this package. In-memory or FastAPI background tasks are not the scheduler.

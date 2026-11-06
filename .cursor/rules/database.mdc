@@ -1,0 +1,17 @@
+---
+description: Schema, migrations, and Postgres job locking
+globs: backend/**/{models.py,alembic/**,db.py}
+alwaysApply: false
+---
+
+# Database
+
+PostgreSQL is the source of schedule and job state. Alembic is the only schema path. Add a new revision under `backend/alembic/versions` and keep `models.py` aligned. Do not edit an already applied revision.
+
+Use timezone-aware `DateTime(timezone=True)`. Store campaign timezone separately as an IANA id.
+
+Partial unique indexes protect one schedule post per campaign slot and one active Threads user id. Use `sql_text` for `postgresql_where`: the `Post.text` column must not shadow SQLAlchemy `text()`.
+
+Job claims rely on `FOR UPDATE SKIP LOCKED`. Integration tests that cover claiming or recovery must use Testcontainers PostgreSQL, not SQLite.
+
+Do not store plaintext tokens. The token column holds Fernet ciphertext.

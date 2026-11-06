@@ -1,0 +1,18 @@
+---
+description: Project structure and change rules for Account Warm-up
+alwaysApply: true
+---
+
+# Account Warm-up
+
+Modular monolith: `backend/src/acwa` serves the API and the worker, `frontend` is a separate React app. Do not add Celery, Redis, Kafka, or extra services.
+
+Keep business rules on the backend. The browser never calls DeepSeek or Threads and never receives API keys or tokens.
+
+Do not invent external endpoints, scopes, or fields. Documented contracts live in `docs/configuration.md`.
+
+Update the matching doc and `backend/openapi.json` plus generated frontend types when behavior or the HTTP contract changes. Do not edit `frontend/src/api/schema.d.ts` by hand.
+
+Do not publish to Threads during startup, migrations, or tests. Live publishing happens only when `ACWA_INTEGRATION_MODE=live` and the user starts a publish.
+
+This install is a single local owner. `ACWA_AUTH_TOKEN` is required; without that password the API and UI stay closed.

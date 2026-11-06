@@ -1,0 +1,17 @@
+---
+description: FastAPI services, sessions, and error boundaries
+globs: backend/src/acwa/**/*.py
+alwaysApply: false
+---
+
+# Backend
+
+`api` returns Pydantic schemas, never SQLAlchemy models. Validate again on the server even if the form already checked the input.
+
+One request uses the session from `get_session`. Commit through that dependency. Inside a service, commit before an external call when the database must record that the call is about to happen, as with `publish_dispatched_at`.
+
+Inject the clock, generator, and Threads gateway through settings or `app.state`. Tests pass fakes. Do not construct a live client inside a domain function.
+
+Worker claims jobs with `FOR UPDATE SKIP LOCKED`, commits the claim, then performs network work. A publish retry enqueues `publish` or `reconcile` and does not enqueue `generate`.
+
+Status changes go through `transition_post`. `UNKNOWN` means the publish request may have succeeded; do not call `threads_publish` again until the user explicitly retries.

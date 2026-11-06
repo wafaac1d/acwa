@@ -1,0 +1,17 @@
+---
+description: Pytest, Vitest, and what must stay stubbed
+globs: backend/tests/**/*.py,frontend/**/*.test.tsx,frontend/**/*.spec.ts
+alwaysApply: false
+---
+
+# Testing
+
+Use `FrozenClock` for schedule and worker tests. Do not assert against the machine clock.
+
+Stub DeepSeek and Threads. Integration tests that need row locks use the Testcontainers Postgres fixture and truncate between tests.
+
+Cover status transitions, manual approval, publish retry without a new generation, concurrent claim, stuck recovery, rate limit, expired authorization, provider errors, and an ambiguous publish timeout.
+
+A response test must fail if a secret or ciphertext appears in JSON. Demo end-to-end flow must show that nothing was sent to Threads.
+
+Frontend unit tests use Vitest and Testing Library. Playwright covers the demo UI against a running stack and is not part of `npm test`.

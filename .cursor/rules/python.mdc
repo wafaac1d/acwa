@@ -1,0 +1,17 @@
+---
+description: Python typing, time, and style for the acwa package
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Python
+
+Target Python 3.12. Annotate public functions. Run Ruff and mypy on `src`.
+
+Keep services synchronous. Use the sync SQLAlchemy session and sync httpx. Do not mix `asyncio.run` into request or worker code.
+
+Datetimes are timezone-aware UTC. Convert campaign wall time with `zoneinfo` and IANA ids. Tests use `FrozenClock`, not `datetime.now()`.
+
+Raise `ApiError` for expected API failures. Integration failures use `IntegrationError` or `AmbiguousPublishError`. Do not catch `Exception` and hide the kind of failure.
+
+Every external HTTP call has a timeout from settings. Retries belong in the client and only for the cases that client documents.

@@ -1,0 +1,17 @@
+---
+description: DeepSeek and Threads client boundaries
+globs: backend/src/acwa/integrations/**/*.py
+alwaysApply: false
+---
+
+# Integrations
+
+Business code depends on `ContentGenerator` and `ThreadsGateway`. `demo` and `live` are selected in `build_generator` and `build_threads`.
+
+Demo implementations must not call the network. Their posts use a `demo:` id, `is_demo_publication=true`, and a null permalink. Text is prefixed with `[демо`.
+
+Live clients send only documented fields. DeepSeek: model, messages, temperature, max_tokens, stream false, thinking disabled, JSON response format. Do not send `top_p` together with temperature.
+
+Threads text publish is create container then `threads_publish`. A timeout or network error on publish raises `AmbiguousPublishError`. A definite rate-limit or auth response is not ambiguous. GET requests that put `access_token` in the query must not be logged.
+
+Pass user campaign text as generation input. It cannot change endpoints, tokens, or application rules.

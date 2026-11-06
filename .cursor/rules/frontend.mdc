@@ -1,0 +1,19 @@
+---
+description: React UI structure, forms, and API access
+globs: frontend/src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend
+
+UI copy is Russian. Routes live in `App.tsx`, pages in `src/pages`, shared presentation in `src/components`.
+
+Server state goes through TanStack Query and `src/api/client.ts`. Do not duplicate OpenAPI types by hand. Local form state stays in React Hook Form.
+
+Give every data screen a loading, empty, and error state. Show `error.message` from the API, not a stack trace. Buttons must call a real action.
+
+Associate inputs with visible labels. Keep keyboard focus and button names understandable without color alone.
+
+The access token, if used, stays in `sessionStorage`. Never put DeepSeek or Threads secrets in the bundle or in rendered text.
+
+Client Zod schemas are convenience only. The server remains the source of validation.

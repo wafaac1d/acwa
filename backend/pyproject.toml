@@ -1,0 +1,63 @@
+[project]
+name = "acwa"
+version = "0.1.0"
+description = "Account Warm-up: генерация постов через DeepSeek и публикация в Threads по расписанию"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14",
+  "cryptography>=44",
+  "fastapi>=0.115",
+  "httpx>=0.28",
+  "psycopg[binary]>=3.2",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.6",
+  "regex>=2024.11.6",
+  "sqlalchemy>=2.0.36",
+  "tzdata>=2024.2",
+  "uvicorn>=0.32",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "ruff>=0.8",
+  "testcontainers[postgres]>=4.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+"src/acwa/api/**" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["acwa"]
+mypy_path = "src"
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "regex"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "integration: tests that need PostgreSQL via Testcontainers",
+]

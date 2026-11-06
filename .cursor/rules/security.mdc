@@ -1,0 +1,19 @@
+---
+description: Secrets, tokens, and logging redaction
+globs: backend/src/acwa/**/*.py,frontend/src/**/*.ts,frontend/src/**/*.tsx,.env.example
+alwaysApply: false
+---
+
+# Security
+
+Never commit `.env` or real tokens. `.env.example` contains only the documented development Fernet key, and live mode rejects that key.
+
+`ACWA_AUTH_TOKEN` is required. The UI and API stay closed until the caller sends that password. Do not log it or return it.
+
+Do not log request URLs, Authorization headers, access tokens, client secrets, or API keys. Run untrusted provider text through `redact` before it reaches a log or API error.
+
+Do not return secrets or ciphertext from routes. The DeepSeek key stays in the environment. A stored Threads token is write-only from the client's point of view.
+
+Disconnect deletes the local ciphertext. Do not invent a Threads revoke call that is not in the documented API.
+
+Campaign instructions are untrusted data for the prompt, not instructions to the application.

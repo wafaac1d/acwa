@@ -1,0 +1,57 @@
+name: acwa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: acwa
+      POSTGRES_PASSWORD: acwa
+      POSTGRES_DB: acwa
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U acwa -d acwa"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment: &app_env
+      ACWA_DATABASE_URL: postgresql+psycopg://acwa:acwa@postgres:5432/acwa
+      ACWA_INTEGRATION_MODE: ${ACWA_INTEGRATION_MODE:-demo}
+      ACWA_DEMO_SEED: ${ACWA_DEMO_SEED:-true}
+      ACWA_TOKEN_ENCRYPTION_KEY: ${ACWA_TOKEN_ENCRYPTION_KEY:-LT9kgrT3RvPvRfszF9yrxTTVqCqlwnkN7nlzgzwzjLo=}
+      ACWA_AUTH_TOKEN: ${ACWA_AUTH_TOKEN:?Задайте пароль ACWA_AUTH_TOKEN в .env}
+      ACWA_DEEPSEEK_API_KEY: ${ACWA_DEEPSEEK_API_KEY:-}
+      ACWA_DEEPSEEK_MODEL: ${ACWA_DEEPSEEK_MODEL:-deepseek-flash}
+      ACWA_THREADS_APP_ID: ${ACWA_THREADS_APP_ID:-}
+      ACWA_THREADS_APP_SECRET: ${ACWA_THREADS_APP_SECRET:-}
+      ACWA_THREADS_REDIRECT_URI: http://127.0.0.1:8080/api/accounts/threads/callback
+      ACWA_FRONTEND_ORIGIN: http://127.0.0.1:8080
+      ACWA_CORS_ORIGINS: http://127.0.0.1:8080,http://127.0.0.1:5173,http://localhost:5173
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    environment: *app_env
+    command: ["python", "-m", "acwa.worker"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
