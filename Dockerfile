@@ -7,6 +7,11 @@ RUN npm run build
 
 FROM python:3.12-slim-bookworm
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx gettext-base \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
+
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /uvx /bin/
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
@@ -20,6 +25,7 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 COPY backend/docker-entrypoint.sh /entrypoint.sh
 COPY docker/start.sh /start.sh
+COPY docker/nginx.conf.template /etc/nginx/acwa.conf.template
 COPY --from=frontend /src/dist /app/static
 RUN uv sync --frozen --no-dev && chmod +x /entrypoint.sh /start.sh
 
