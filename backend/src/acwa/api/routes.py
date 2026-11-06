@@ -599,6 +599,7 @@ def _campaign_read(session: Session, campaign: Campaign, clock: Clock) -> Campai
         starts_on=campaign.starts_on,
         ends_on=campaign.ends_on,
         threads_topic_tag=campaign.threads_topic_tag,
+        reply_text=campaign.reply_text,
         status=campaign.status,
         schedule_cursor=campaign.schedule_cursor,
         created_at=campaign.created_at,

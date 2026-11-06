@@ -543,6 +543,8 @@ export interface components {
             ends_on: string | null;
             /** Threads Topic Tag */
             threads_topic_tag: string | null;
+            /** Reply Text */
+            reply_text: string | null;
             /** Status */
             status: string;
             /** Schedule Cursor */
@@ -692,6 +694,11 @@ export interface components {
              * @default
              */
             threads_topic_tag: string;
+            /**
+             * Reply Text
+             * @default
+             */
+            reply_text: string;
             /**
              * Activate
              * @default false

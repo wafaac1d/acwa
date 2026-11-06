@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from acwa.content.validate import normalize_topic_tag
+from acwa.content.validate import normalize_reply_text, normalize_topic_tag
 from acwa.scheduling.calc import parse_hhmm, validate_timezone
 
 MAX_TIMES = 12
@@ -80,6 +80,17 @@ def campaign_field_errors(data: dict[str, object]) -> dict[str, str]:
         errors["threads_topic_tag"] = tag_error
     else:
         data["threads_topic_tag"] = tag
+    reply, reply_error = normalize_reply_text(
+        data.get("reply_text"),
+        allow_emoji=data.get("allow_emoji") is True,
+        allow_hashtags=data.get("allow_hashtags") is True,
+        allow_links=data.get("allow_links") is True,
+        forbidden=_text(data.get("forbidden")),
+    )
+    if reply_error:
+        errors["reply_text"] = reply_error
+    else:
+        data["reply_text"] = reply
     return errors
 
 

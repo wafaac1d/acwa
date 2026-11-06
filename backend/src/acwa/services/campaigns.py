@@ -35,6 +35,7 @@ FIELDS = (
     "starts_on",
     "ends_on",
     "threads_topic_tag",
+    "reply_text",
 )
 
 
@@ -113,7 +114,7 @@ def unarchive_campaign(session: Session, campaign: Campaign, clock: Clock) -> Ca
 def _empty(field: str) -> object:
     if field in {"context", "audience", "goal", "extra_instructions", "required_points", "forbidden", "examples"}:
         return ""
-    if field in {"ends_on", "threads_topic_tag"}:
+    if field in {"ends_on", "threads_topic_tag", "reply_text"}:
         return None
     raise ApiError(422, "validation_error", "Не хватает поля кампании", {field: "Обязательное поле"})
 

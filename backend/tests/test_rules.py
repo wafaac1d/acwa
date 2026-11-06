@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from acwa.content.prompt import PROMPT_VERSION, build_prompt
-from acwa.content.validate import normalize_topic_tag, validate_post_text
+from acwa.content.validate import normalize_reply_text, normalize_topic_tag, validate_post_text
 from acwa.domain.campaign_rules import campaign_field_errors
 from acwa.domain.status import InvalidTransition, PostStatus, transition
 from acwa.integrations.types import should_refresh_token
@@ -72,6 +72,54 @@ def test_topic_tag_follows_threads_limits() -> None:
     assert normalize_topic_tag("a.b")[1]
     assert normalize_topic_tag("a&b")[1]
     assert normalize_topic_tag("x" * 51)[1]
+
+
+def test_campaign_reply_uses_the_same_threads_limits() -> None:
+    blank, blank_error = normalize_reply_text(
+        "  ",
+        allow_emoji=False,
+        allow_hashtags=False,
+        allow_links=False,
+        forbidden="",
+    )
+    assert blank is None and blank_error is None
+    kept, kept_error = normalize_reply_text(
+        " Короткое продолжение ",
+        allow_emoji=False,
+        allow_hashtags=False,
+        allow_links=False,
+        forbidden="",
+    )
+    assert kept == "Короткое продолжение" and kept_error is None
+    errors = campaign_field_errors(
+        {
+            "account_id": uuid4(),
+            "name": "Кампания",
+            "topic": "Тема",
+            "context": "",
+            "audience": "",
+            "language": "ru",
+            "tone": "спокойный",
+            "goal": "",
+            "desired_length": "medium",
+            "extra_instructions": "",
+            "required_points": "",
+            "forbidden": "гарантия дохода",
+            "examples": "",
+            "allow_emoji": False,
+            "allow_hashtags": False,
+            "allow_links": False,
+            "publish_mode": "manual",
+            "timezone": "UTC",
+            "weekdays": [1],
+            "times_of_day": ["10:00"],
+            "starts_on": date(2026, 1, 1),
+            "ends_on": None,
+            "reply_text": "а" * 501,
+        }
+    )
+    assert "reply_text" in errors
+    assert "лимита Threads" in errors["reply_text"]
 
 
 def test_campaign_requires_iana_zone_and_defaults_are_not_all_mandatory() -> None:

@@ -196,6 +196,19 @@ def test_manual_approval_and_publish_retry_does_not_regenerate(session_factory, 
     session.close()
 
 
+def test_campaign_reply_is_copied_onto_a_new_trial(session_factory, settings) -> None:
+    session = session_factory()
+    from acwa.security.crypto import TokenCipher
+    from acwa.services.pipeline import request_trial
+
+    clock = FrozenClock(datetime(2026, 1, 5, 12, tzinfo=UTC))
+    account = _account(session, TokenCipher(settings.token_encryption_key))
+    campaign = _campaign(session, account, reply_text="Продолжение из кампании")
+    post = request_trial(session, campaign, clock, settings)
+    assert post.reply_text == "Продолжение из кампании"
+    session.close()
+
+
 def test_reply_continues_the_thread_and_topic_is_only_on_the_root(session_factory, settings) -> None:
     session = session_factory()
     from acwa.security.crypto import TokenCipher

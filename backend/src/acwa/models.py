@@ -89,6 +89,7 @@ class Campaign(Base):
     ends_on: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(16), default="paused")
     threads_topic_tag: Mapped[str | None] = mapped_column(String(50))
+    reply_text: Mapped[str | None] = mapped_column(Text)
     schedule_cursor: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

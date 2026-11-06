@@ -34,6 +34,34 @@ def validate_post_text(
     return errors
 
 
+def normalize_reply_text(
+    value: object,
+    *,
+    allow_emoji: bool,
+    allow_hashtags: bool,
+    allow_links: bool,
+    forbidden: str,
+) -> tuple[str | None, str | None]:
+    """Return a continuation comment or the first Threads validation error. Blank means none."""
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, "Продолжение в комментарии должно быть текстом"
+    cleaned = value.strip()
+    if not cleaned:
+        return None, None
+    errors = validate_post_text(
+        cleaned,
+        allow_emoji=allow_emoji,
+        allow_hashtags=allow_hashtags,
+        allow_links=allow_links,
+        forbidden=forbidden,
+    )
+    if errors:
+        return None, errors[0]
+    return cleaned, None
+
+
 def normalize_topic_tag(value: object) -> tuple[str | None, str | None]:
     """Return a Threads topic_tag or an error. Blank means no tag.
 

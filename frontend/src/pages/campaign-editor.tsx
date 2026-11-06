@@ -38,6 +38,7 @@ const schema = z.object({
   starts_on: z.string().min(1, "Укажите дату начала"),
   ends_on: z.string(),
   threads_topic_tag: z.string().max(50, "Тема Threads не длиннее 50 символов"),
+  reply_text: z.string().max(500, "Продолжение не длиннее 500 символов"),
   activate: z.boolean(),
 });
 
@@ -210,6 +211,12 @@ export function CampaignEditorPage() {
             Официальный Threads API не принимает публикацию в сообщество. Выберите тему: она уйдёт параметром topic_tag.
           </p>
         )}
+        <Field label="Продолжение в комментарии" error={form.formState.errors.reply_text?.message}>
+          <Textarea {...form.register("reply_text")} placeholder="Необязательно. Опубликуется ответом на новый пост." />
+        </Field>
+        <p className="text-sm text-stone-600">
+          Текст попадёт в новые пробные и плановые посты после сохранения. Уже созданные посты не изменятся.
+        </p>
         {placement === "topic" && (
           <p className="text-sm text-stone-600">От 1 до 50 символов, без точки и символа &.</p>
         )}
@@ -369,6 +376,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
       starts_on: todayISO(),
       ends_on: "",
       threads_topic_tag: "",
+      reply_text: "",
       activate: false,
     };
   }
@@ -396,6 +404,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
     starts_on: campaign.starts_on,
     ends_on: campaign.ends_on ?? "",
     threads_topic_tag: campaign.threads_topic_tag ?? "",
+    reply_text: campaign.reply_text ?? "",
     activate: campaign.status === "active",
   };
 }
