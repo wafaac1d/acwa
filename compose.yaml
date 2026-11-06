@@ -16,7 +16,9 @@ services:
       retries: 20
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment: &app_env
       ACWA_DATABASE_URL: postgresql+psycopg://acwa:acwa@postgres:5432/acwa
       ACWA_INTEGRATION_MODE: ${ACWA_INTEGRATION_MODE:-demo}
@@ -37,7 +39,9 @@ services:
         condition: service_healthy
 
   worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment: *app_env
     command: ["python", "-m", "acwa.worker"]
     depends_on:

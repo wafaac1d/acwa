@@ -18,6 +18,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Корневой `Dockerfile` собирает общий образ API и worker. Интерфейс собирается из `frontend/Dockerfile`. Worker запускает тот же образ командой `python -m acwa.worker`.
+
 Интерфейс: http://127.0.0.1:8080  
 API: http://127.0.0.1:8000/api/health  
 OpenAPI: http://127.0.0.1:8000/docs
