@@ -1,10 +1,12 @@
+import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from acwa.api.deps import password_is_valid, require_access
 from acwa.api.routes import router
@@ -85,6 +87,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return await call_next(request)
 
+    mount_interface(app)
+
     @app.exception_handler(ApiError)
     async def handle_api_error(_request: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse(
@@ -110,6 +114,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     return app
+
+
+def mount_interface(app: FastAPI, directory: Path | None = None) -> None:
+    """Serve the built React app from the same origin as the API."""
+    static_dir = directory or Path(os.environ.get("ACWA_STATIC_DIR", "/app/static"))
+    index = static_dir / "index.html"
+    if not index.is_file():
+        return
+    root = static_dir.resolve()
+
+    @app.get("/", include_in_schema=False)
+    def interface_root() -> FileResponse:
+        return FileResponse(index)
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def interface_file(full_path: str) -> FileResponse:
+        if full_path.startswith("api/") or full_path in {"docs", "redoc", "openapi.json"}:
+            raise HTTPException(status_code=404)
+        candidate = (static_dir / full_path).resolve()
+        if candidate != root and root not in candidate.parents:
+            raise HTTPException(status_code=404)
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(index)
 
 
 app = create_app()

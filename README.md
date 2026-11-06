@@ -18,7 +18,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Корневой `Dockerfile` собирает общий образ API и worker. Интерфейс собирается из `frontend/Dockerfile`. Worker запускает тот же образ командой `python -m acwa.worker`.
+Корневой `Dockerfile` собирает интерфейс, API и worker в один образ и слушает переменную `PORT`. На Railway достаточно этого образа: открывается страница входа, а задания обрабатывает тот же контейнер. Локальный Compose оставляет worker отдельным процессом. `frontend/Dockerfile` остаётся для отдельного nginx.
 
 Интерфейс: http://127.0.0.1:8080  
 API: http://127.0.0.1:8000/api/health  
