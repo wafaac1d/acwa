@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiRequestError, type Account, type Settings } from "@/api/client";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +25,7 @@ export function SettingsPage() {
         }),
       }),
     onSuccess: () => {
-      setMessage("Параметры генерации сохранены. Ключ DeepSeek остаётся только на сервере.");
+      setMessage("Сохранено");
       queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
     onError: (reason) => setMessage(reason instanceof ApiRequestError ? reason.message : "Не удалось сохранить"),
@@ -51,57 +50,56 @@ export function SettingsPage() {
   if (settings.isError || !settings.data) return <ErrorState message="Не удалось загрузить настройки" />;
   const current = settings.data;
   return (
-    <div className="space-y-5">
-      <h2 className="font-serif text-4xl">Настройки</h2>
-      {message && <p className="text-sm">{message}</p>}
-      <Card className="space-y-3">
-        <h3 className="font-serif text-2xl">Режим</h3>
-        <p className="text-sm">Сейчас: {current.integration_mode === "demo" ? "демо" : "настоящие интеграции"}.</p>
-        <p className="text-sm text-stone-700">
-          Переключение делается переменной ACWA_INTEGRATION_MODE. Из интерфейса нельзя случайно включить настоящую публикацию.
-        </p>
-        <p className="text-sm">{current.public_deployment_ready ? "" : "Приложение не готово к публичному размещению без защиты доступа."}</p>
-      </Card>
-      <Card className="space-y-3">
-        <h3 className="font-serif text-2xl">Threads</h3>
-        <p className="text-sm">Приложение Meta настроено: {current.threads.configured ? "да" : "нет"}.</p>
-        <p className="text-sm">Разрешения: {current.threads.scopes.join(", ")}. Лимит текста: {current.threads.text_limit}.</p>
-        <p className="text-sm">Redirect URI: {current.threads.redirect_uri}</p>
-        {current.integration_mode === "demo" ? (
-          <Button onClick={() => connectDemo.mutate()} disabled={connectDemo.isPending}>Подключить демонстрационный аккаунт</Button>
-        ) : (
-          <Button onClick={() => startOauth.mutate()} disabled={startOauth.isPending || !current.threads.configured}>Подключить Threads</Button>
-        )}
-        <ul className="space-y-3">
+    <div className="space-y-6">
+      <h2 className="text-2xl font-semibold tracking-tight">Настройки</h2>
+      {message && <p className="text-sm text-muted">{message}</p>}
+      <section className="rounded-xl border border-line bg-white shadow-card">
+        <div className="flex flex-col items-start gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-medium">Threads</h3>
+            <p className="mt-0.5 text-xs text-muted">
+              {current.integration_mode === "demo" ? "Демо" : "Live"} · {current.threads.scopes.join(", ")}
+            </p>
+          </div>
+          {current.integration_mode === "demo" ? (
+            <Button onClick={() => connectDemo.mutate()} disabled={connectDemo.isPending}>Подключить демонстрационный аккаунт</Button>
+          ) : (
+            <Button onClick={() => startOauth.mutate()} disabled={startOauth.isPending || !current.threads.configured}>Подключить Threads</Button>
+          )}
+        </div>
+        <ul className="divide-y divide-line">
           {accounts.data?.items.map((account) => (
-            <li key={account.id} className="rounded-2xl bg-paper p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <strong>{account.display_name || account.username || "Аккаунт"}</strong>
-                <Badge value={account.status} label={ACCOUNT_STATUS_LABELS[account.status] ?? account.status} />
-                {account.is_demo && <Badge value="paused" label="Демо" />}
+            <li key={account.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="font-medium">{account.display_name || account.username || "Аккаунт"}</strong>
+                  <Badge value={account.status} label={ACCOUNT_STATUS_LABELS[account.status] ?? account.status} />
+                  {account.is_demo && <Badge value="paused" label="Демо" />}
+                </div>
+                <p className="mt-1 text-sm text-muted">
+                  {account.username ? `@${account.username}` : "Имя недоступно"}
+                  {account.token_expires_at ? ` · до ${new Date(account.token_expires_at).toLocaleDateString("ru")}` : ""}
+                </p>
+                {account.reauth_message && <p className="mt-1 text-sm text-red-800">{account.reauth_message}</p>}
               </div>
-              <p className="mt-1 text-sm text-stone-700">
-                {account.username ? `@${account.username}` : "Имя недоступно"} · id {account.threads_user_id || "—"}
-              </p>
-              {account.token_expires_at && <p className="text-sm">Токен действует до {new Date(account.token_expires_at).toLocaleString("ru")}</p>}
-              {account.reauth_message && <p className="text-sm text-red-800">{account.reauth_message}</p>}
               {account.status === "connected" && (
-                <Button className="mt-2" variant="secondary" onClick={() => disconnect.mutate(account.id)}>Отключить</Button>
+                <Button variant="secondary" onClick={() => disconnect.mutate(account.id)}>Отключить</Button>
               )}
             </li>
           ))}
-          {accounts.data?.items.length === 0 && <li className="text-sm">Подключённых аккаунтов нет.</li>}
+          {accounts.data?.items.length === 0 && <li className="px-5 py-4 text-sm text-muted">Аккаунтов нет.</li>}
         </ul>
-      </Card>
-      <Card className="space-y-3">
-        <h3 className="font-serif text-2xl">Генерация</h3>
-        <p className="text-sm">
-          DeepSeek {current.deepseek.configured ? "настроен" : "не настроен"}. Модель {current.generation.model}. Ключ в интерфейс не передаётся.
-        </p>
-        <p className="text-sm">Адрес API: {current.deepseek.base_url}. Версия промпта: {current.generation.prompt_version}.</p>
-        <div className="grid gap-3 md:grid-cols-2">
+      </section>
+      <section className="space-y-4 rounded-xl border border-line bg-white p-5 shadow-card">
+        <div>
+          <h3 className="text-sm font-medium">Генерация</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            {current.deepseek.configured ? current.generation.model : "DeepSeek не настроен"}
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
           <label>
-            <Label>Температура, от 0 до 2</Label>
+            <Label>Температура</Label>
             <Input
               type="number"
               min={0}
@@ -112,7 +110,7 @@ export function SettingsPage() {
             />
           </label>
           <label>
-            <Label>Максимум токенов ответа, до 1024</Label>
+            <Label>Токены ответа</Label>
             <Input
               type="number"
               min={16}
@@ -123,8 +121,7 @@ export function SettingsPage() {
           </label>
         </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>Сохранить параметры</Button>
-        <p className="text-sm leading-6 text-stone-700">{current.missed_slot_policy}</p>
-      </Card>
+      </section>
     </div>
   );
 }

@@ -10,6 +10,7 @@ from acwa.errors import ApiError
 from acwa.models import Campaign, ThreadsAccount
 from acwa.scheduling.calc import Schedule, schedule_from_campaign
 from acwa.services.accounts import assert_account_usable
+from acwa.services.learning import next_local_midnight
 from acwa.services.planner import apply_schedule_change, pause_campaign, resume_campaign
 
 FIELDS = (
@@ -36,6 +37,7 @@ FIELDS = (
     "ends_on",
     "threads_topic_tag",
     "reply_text",
+    "learning_enabled",
 )
 
 
@@ -57,6 +59,8 @@ def save_campaign(
         assert_account_usable(account)
     now = clock.now()
     previous = schedule_from_campaign(campaign) if campaign is not None else None
+    was_learning = bool(campaign.learning_enabled) if campaign is not None else False
+    previous_zone = campaign.timezone if campaign is not None else None
     if campaign is None:
         campaign = Campaign(account_id=account.id, created_at=now, status=CampaignStatus.PAUSED)
         session.add(campaign)
@@ -66,7 +70,14 @@ def save_campaign(
             value = sorted(set(value))
         if field == "times_of_day" and isinstance(value, list):
             value = sorted(set(value))
+        if field == "learning_enabled":
+            value = bool(value)
         setattr(campaign, field, value if value is not None else _empty(field))
+    zone_changed = previous_zone is not None and previous_zone != campaign.timezone
+    if campaign.learning_enabled and (not was_learning or campaign.learning_next_at is None or zone_changed):
+        campaign.learning_next_at = next_local_midnight(now, campaign.timezone)
+    if not campaign.learning_enabled:
+        campaign.learning_next_at = None
     campaign.account_id = account.id
     campaign.updated_at = now
     current = Schedule(
@@ -116,6 +127,8 @@ def _empty(field: str) -> object:
         return ""
     if field in {"ends_on", "threads_topic_tag", "reply_text"}:
         return None
+    if field == "learning_enabled":
+        return False
     raise ApiError(422, "validation_error", "Не хватает поля кампании", {field: "Обязательное поле"})
 
 

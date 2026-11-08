@@ -4,15 +4,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: "#f4efe6",
-        ink: "#1d1915",
-        moss: "#0f6b56",
-        clay: "#8c3d32",
-        line: "#ddd4c6",
+        canvas: "#eef0f3",
+        ink: "#121417",
+        line: "#d9dee5",
+        muted: "#5c6570",
       },
       fontFamily: {
-        sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["Source Serif 4", "ui-serif", "Georgia", "serif"],
+        sans: ["IBM Plex Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        card: "0 1px 2px rgba(18, 20, 23, 0.04)",
       },
     },
   },

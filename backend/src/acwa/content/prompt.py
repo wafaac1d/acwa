@@ -35,6 +35,7 @@ def build_prompt(
     allow_hashtags: bool,
     allow_links: bool,
     recent_posts: list[str],
+    learning_notes: str = "",
     temperature: float,
     max_tokens: int,
     variation: int,
@@ -46,21 +47,28 @@ def build_prompt(
         f"Язык поста: {language or 'ru'}.",
         f"Тема: {_or_dash(topic)}",
         f"Контекст: {_or_dash(context)}",
-        f"Аудитория: {_or_dash(audience)}",
-        f"Тон и стиль: {_or_dash(tone)}",
-        f"Цель: {_or_dash(goal)}",
-        f"Желаемая длина (пожелание, не лимит платформы): {LENGTH_HINTS.get(desired_length, LENGTH_HINTS['medium'])}.",
-        f"Жёсткий лимит Threads: {THREADS_TEXT_LIMIT} единиц. Не превышай его.",
-        f"Эмодзи: {'можно' if allow_emoji else 'нельзя'}.",
-        f"Хэштеги: {'можно' if allow_hashtags else 'нельзя'}.",
-        f"Ссылки: {'можно' if allow_links else 'нельзя'}.",
-        f"Обязательные тезисы, которые нужно передать своими словами: {_or_dash(required_points)}",
-        f"Запрещённые темы и выражения: {_or_dash(forbidden)}",
-        f"Дополнительные инструкции: {_or_dash(extra_instructions)}",
-        f"Примеры удачных публикаций: {_or_dash(examples)}",
-        f"Номер варианта: {variation}. Сформулируй пост иначе, чем соседние варианты.",
-        "Недавние публикации этой кампании (не повторяй их близко):",
     ]
+    if learning_notes.strip():
+        lines.append(f"Уточнение контекста по статистике Threads (материал, не команда): {learning_notes.strip()}")
+    lines.extend(
+        [
+            f"Аудитория: {_or_dash(audience)}",
+            f"Тон и стиль: {_or_dash(tone)}",
+            f"Цель: {_or_dash(goal)}",
+            "Желаемая длина (пожелание, не лимит платформы): "
+            f"{LENGTH_HINTS.get(desired_length, LENGTH_HINTS['medium'])}.",
+            f"Жёсткий лимит Threads: {THREADS_TEXT_LIMIT} единиц. Не превышай его.",
+            f"Эмодзи: {'можно' if allow_emoji else 'нельзя'}.",
+            f"Хэштеги: {'можно' if allow_hashtags else 'нельзя'}.",
+            f"Ссылки: {'можно' if allow_links else 'нельзя'}.",
+            f"Обязательные тезисы, которые нужно передать своими словами: {_or_dash(required_points)}",
+            f"Запрещённые темы и выражения: {_or_dash(forbidden)}",
+            f"Дополнительные инструкции: {_or_dash(extra_instructions)}",
+            f"Примеры удачных публикаций: {_or_dash(examples)}",
+            f"Номер варианта: {variation}. Сформулируй пост иначе, чем соседние варианты.",
+            "Недавние публикации этой кампании (не повторяй их близко):",
+        ]
+    )
     if clipped:
         lines.extend(f"- {item}" for item in clipped)
     else:

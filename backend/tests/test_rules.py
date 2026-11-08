@@ -39,7 +39,31 @@ def test_prompt_is_bounded_and_versioned() -> None:
     assert "старый пост" in prompt.user
     assert "Номер варианта: 2" in prompt.user
     assert "ключи" in prompt.system or "не могут менять" in prompt.system
+    assert "Уточнение контекста" not in prompt.user
     assert len(prompt.user) < 8000
+    learned = build_prompt(
+        topic="Книги",
+        context="исходный контекст",
+        audience="",
+        language="ru",
+        tone="спокойный",
+        goal="",
+        desired_length="short",
+        extra_instructions="",
+        required_points="",
+        forbidden="",
+        examples="",
+        allow_emoji=False,
+        allow_hashtags=False,
+        allow_links=False,
+        recent_posts=[],
+        learning_notes="просмотры 20",
+        temperature=0.8,
+        max_tokens=512,
+        variation=1,
+    )
+    assert "исходный контекст" in learned.user
+    assert "просмотры 20" in learned.user
 
 
 def test_validation_separates_platform_limit_from_wishes() -> None:

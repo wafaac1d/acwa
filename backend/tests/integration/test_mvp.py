@@ -196,6 +196,92 @@ def test_manual_approval_and_publish_retry_does_not_regenerate(session_factory, 
     session.close()
 
 
+def test_learning_does_not_invent_demo_stats_and_ranks_live_totals(session_factory, settings) -> None:
+    session = session_factory()
+    from acwa.integrations.types import MediaInsights
+    from acwa.security.crypto import TokenCipher
+    from acwa.services.learning import learn_due_campaigns
+
+    cipher = TokenCipher(settings.token_encryption_key)
+    clock = FrozenClock(datetime(2026, 1, 5, 12, tzinfo=UTC))
+    account = _account(session, cipher)
+    campaign = _campaign(
+        session,
+        account,
+        context="Исходный контекст",
+        learning_enabled=True,
+        learning_next_at=datetime(2026, 1, 5, 0, tzinfo=UTC),
+    )
+    session.commit()
+    learn_due_campaigns(
+        session,
+        clock=clock,
+        settings=settings,
+        threads=DemoThreads(),
+        cipher=cipher,
+    )
+    session.flush()
+    session.refresh(campaign)
+    assert campaign.context == "Исходный контекст"
+    assert campaign.learning_notes == ""
+    assert campaign.learning_status is not None and "не запрашива" in campaign.learning_status
+    assert campaign.learning_next_at is not None and campaign.learning_next_at > clock.now()
+
+    live = settings.model_copy(update={"integration_mode": "live"})
+    account.is_demo = False
+    account.token_expires_at = datetime(2026, 3, 1, tzinfo=UTC)
+    strong = Post(
+        campaign_id=campaign.id,
+        account_id=account.id,
+        origin="schedule",
+        status="PUBLISHED",
+        text="Сильный конкретный пост",
+        external_id="1789001",
+        is_demo_publication=False,
+        published_at=datetime(2026, 1, 4, 15, tzinfo=UTC),
+        created_at=clock.now(),
+        updated_at=clock.now(),
+    )
+    weak = Post(
+        campaign_id=campaign.id,
+        account_id=account.id,
+        origin="schedule",
+        status="PUBLISHED",
+        text="Слабый общий пост",
+        external_id="1789002",
+        is_demo_publication=False,
+        published_at=datetime(2026, 1, 4, 16, tzinfo=UTC),
+        created_at=clock.now(),
+        updated_at=clock.now(),
+    )
+    session.add_all([strong, weak])
+    campaign.learning_next_at = datetime(2026, 1, 5, 0, tzinfo=UTC)
+    session.commit()
+
+    class RecordingThreads(DemoThreads):
+        def media_insights(self, media_id: str, access_token: str) -> MediaInsights:
+            del access_token
+            self.insight_calls += 1
+            if media_id == "1789001":
+                return MediaInsights(views=20, likes=4, replies=1, reposts=0, quotes=0, shares=1)
+            return MediaInsights(views=2, likes=0, replies=0, reposts=0, quotes=0, shares=0)
+
+    learn_due_campaigns(
+        session,
+        clock=clock,
+        settings=live,
+        threads=RecordingThreads(),
+        cipher=cipher,
+    )
+    session.flush()
+    session.refresh(campaign)
+    assert campaign.context == "Исходный контекст"
+    assert "Сильный конкретный пост" in campaign.learning_notes
+    assert campaign.learning_notes.index("Сильный конкретный пост") < campaign.learning_notes.index("Слабый общий пост")
+    assert "просмотры 20" in campaign.learning_notes
+    session.close()
+
+
 def test_campaign_reply_is_copied_onto_a_new_trial(session_factory, settings) -> None:
     session = session_factory()
     from acwa.security.crypto import TokenCipher
@@ -308,9 +394,7 @@ def test_yesterday_insights_do_not_call_threads_for_demo(session_factory, settin
             return MediaInsights(views=10, likes=2, replies=1, reposts=0, quotes=0, shares=3)
 
     recording = RecordingThreads()
-    notice = collect_yesterday_insights(
-        session, campaign, threads=recording, cipher=cipher, clock=clock, settings=live
-    )
+    notice = collect_yesterday_insights(session, campaign, threads=recording, cipher=cipher, clock=clock, settings=live)
     session.flush()
     session.refresh(yesterday)
     session.refresh(today)

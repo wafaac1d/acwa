@@ -16,38 +16,34 @@ export function CampaignsPage() {
   if (query.isError) return <ErrorState message="Не удалось загрузить кампании" />;
   const items = query.data?.items ?? [];
   return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between gap-3">
-        <h2 className="font-serif text-4xl">Кампании</h2>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-2xl font-semibold tracking-tight">Кампании</h2>
         <Button asChild>
           <Link to="/campaigns/new">Новая кампания</Link>
         </Button>
       </div>
       {items.length === 0 ? (
-        <EmptyState
-          title="Кампаний пока нет"
-          body="Создайте кампанию, проверьте пробный пост и только потом включайте расписание."
-        />
+        <EmptyState title="Кампаний нет" body="Создайте кампанию и проверьте пробный пост." />
       ) : (
-        <ul className="space-y-3">
+        <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-white shadow-card">
           {items.map((campaign) => (
             <li key={campaign.id}>
-              <Link to={`/campaigns/${campaign.id}`} className="block rounded-3xl border border-line bg-white p-4 hover:border-moss">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-serif text-2xl">{campaign.name}</h3>
-                  <Badge value={campaign.status} label={campaignStatusLabel(campaign.status)} />
+              <Link to={`/campaigns/${campaign.id}`} className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-canvas">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-medium">{campaign.name}</h3>
+                    <Badge value={campaign.status} label={campaignStatusLabel(campaign.status)} />
+                  </div>
+                  <p className="mt-0.5 truncate text-sm text-muted">{campaign.topic}</p>
                 </div>
-                <p className="mt-1 text-sm text-stone-700">{campaign.topic}</p>
-                <p className="mt-2 text-sm text-stone-600">
-                  {campaign.publish_mode === "manual" ? "Ручное подтверждение" : "Автопубликация"} ·{" "}
-                  {campaign.timezone}
-                  {campaign.next_slot ? (
+                <p className="shrink-0 text-right text-sm text-muted">
+                  {campaign.publish_mode === "manual" ? "Вручную" : "Авто"}
+                  {campaign.next_slot && (
                     <>
-                      {" "}
-                      · следующий пост {campaign.next_slot.local_time} · <TimeLeft at={campaign.next_slot.scheduled_for} />
+                      <span className="mt-0.5 block tabular-nums text-ink">{campaign.next_slot.local_time}</span>
+                      <TimeLeft at={campaign.next_slot.scheduled_for} />
                     </>
-                  ) : (
-                    ""
                   )}
                 </p>
               </Link>

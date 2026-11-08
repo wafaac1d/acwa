@@ -1,7 +1,7 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Dashboard } from "@/api/client";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState, LoadingState } from "@/components/states";
 import { ACCOUNT_STATUS_LABELS, postStatusLabel } from "@/lib/labels";
@@ -17,61 +17,55 @@ export function DashboardPage() {
   const data = query.data;
   const account = data.accounts.find((item) => item.status === "connected") ?? data.accounts[0];
   return (
-    <div className="space-y-5">
-      <header>
-        <h2 className="font-serif text-4xl">Обзор</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-700">{data.missed_slot_policy}</p>
-      </header>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <h3 className="text-sm font-semibold text-stone-600">Аккаунт</h3>
+    <div className="space-y-8">
+      <h2 className="text-2xl font-semibold tracking-tight">Обзор</h2>
+      <div className="grid gap-px overflow-hidden rounded-xl border border-line bg-line shadow-card sm:grid-cols-3">
+        <div className="bg-white p-5">
+          <p className="text-xs text-muted">Аккаунт</p>
           {account ? (
             <div className="mt-3 space-y-2">
-              <Badge value={account.status} label={ACCOUNT_STATUS_LABELS[account.status] ?? account.status} />
-              <p className="font-serif text-2xl">{account.display_name || account.username || "Без имени"}</p>
-              <p className="text-sm text-stone-600">
-                {account.username ? `@${account.username}` : "Имя пользователя недоступно"} ·{" "}
-                {account.threads_user_id || "нет id"}
+              <p className="text-lg font-medium">{account.display_name || account.username || "Без имени"}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge value={account.status} label={ACCOUNT_STATUS_LABELS[account.status] ?? account.status} />
+                {account.is_demo && <Badge value="paused" label="Демо" />}
+              </div>
+              <p className="text-sm text-muted">
+                {account.username ? `@${account.username}` : "Имя недоступно"}
+                {account.token_expires_at ? ` · до ${new Date(account.token_expires_at).toLocaleDateString("ru")}` : ""}
               </p>
-              {account.is_demo && <p className="text-sm">Демонстрационный аккаунт, не Threads.</p>}
-              {account.token_expires_at && (
-                <p className="text-sm">Токен до {new Date(account.token_expires_at).toLocaleString("ru")}</p>
-              )}
               {account.reauth_message && <p className="text-sm text-red-800">{account.reauth_message}</p>}
             </div>
           ) : (
             <p className="mt-3 text-sm">
-              Аккаунт не подключён. <Link className="font-semibold text-moss" to="/settings">Открыть настройки</Link>
+              Нет аккаунта. <Link className="font-medium underline" to="/settings">Настройки</Link>
             </p>
           )}
-        </Card>
-        <Card>
-          <h3 className="text-sm font-semibold text-stone-600">Кампании</h3>
-          <p className="mt-3 font-serif text-4xl">{data.active_campaigns}</p>
-          <p className="text-sm text-stone-600">включены, на паузе: {data.paused_campaigns}</p>
-        </Card>
-        <Card>
-          <h3 className="text-sm font-semibold text-stone-600">Ближайшие слоты</h3>
+        </div>
+        <div className="bg-white p-5">
+          <p className="text-xs text-muted">Кампании</p>
+          <p className="mt-3 text-3xl font-semibold tabular-nums">{data.active_campaigns}</p>
+          <p className="mt-1 text-sm text-muted">На паузе {data.paused_campaigns}</p>
+        </div>
+        <div className="bg-white p-5">
+          <p className="text-xs text-muted">Ближайшие слоты</p>
           {data.upcoming.length === 0 ? (
-            <p className="mt-3 text-sm">Нет включённых кампаний с будущим слотом.</p>
+            <p className="mt-3 text-sm text-muted">Нет</p>
           ) : (
-            <ul className="mt-3 space-y-2 text-sm">
+            <ul className="mt-3 space-y-1.5 text-sm">
               {data.upcoming.map((slot) => (
-                <li key={slot.scheduled_for}>
-                  {slot.local_time} · {slot.timezone}
+                <li key={slot.scheduled_for} className="tabular-nums">
+                  {slot.local_time}
+                  <span className="text-muted"> · {slot.timezone}</span>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
+        </div>
       </div>
       <section className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <h3 className="font-serif text-2xl">Последние ошибки</h3>
-          {data.recent_errors.length === 0 ? (
-            <p className="mt-3 text-sm">Ошибок нет.</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
+        <Panel title="Ошибки" empty="Нет">
+          {data.recent_errors.length > 0 && (
+            <ul className="space-y-3">
               {data.recent_errors.map((post) => (
                 <li key={post.id}>
                   <Badge value={post.status} label={postStatusLabel(post.status)} />
@@ -80,22 +74,29 @@ export function DashboardPage() {
               ))}
             </ul>
           )}
-        </Card>
-        <Card>
-          <h3 className="font-serif text-2xl">Пропущенные слоты</h3>
-          {data.skipped.length === 0 ? (
-            <p className="mt-3 text-sm">Пропущенных слотов нет.</p>
-          ) : (
-            <ul className="mt-3 space-y-2 text-sm">
+        </Panel>
+        <Panel title="Пропущенные слоты" empty="Нет">
+          {data.skipped.length > 0 && (
+            <ul className="space-y-1.5 text-sm">
               {data.skipped.map((slot) => (
                 <li key={`${slot.slot_at}-${slot.local_time}`}>
-                  {slot.local_time} — {slot.reason_label}
+                  <span className="tabular-nums">{slot.local_time}</span>
+                  <span className="text-muted"> · {slot.reason_label}</span>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
+        </Panel>
       </section>
     </div>
+  );
+}
+
+function Panel({ title, empty, children }: { title: string; empty: string; children?: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-line bg-white p-5 shadow-card">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <div className="mt-3">{children || <p className="text-sm text-muted">{empty}</p>}</div>
+    </section>
   );
 }

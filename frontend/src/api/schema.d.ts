@@ -545,6 +545,16 @@ export interface components {
             threads_topic_tag: string | null;
             /** Reply Text */
             reply_text: string | null;
+            /** Learning Enabled */
+            learning_enabled: boolean;
+            /** Learning Notes */
+            learning_notes: string;
+            /** Learning Status */
+            learning_status: string | null;
+            /** Learning Checked At */
+            learning_checked_at: string | null;
+            /** Learning Next At */
+            learning_next_at: string | null;
             /** Status */
             status: string;
             /** Schedule Cursor */
@@ -699,6 +709,11 @@ export interface components {
              * @default
              */
             reply_text: string;
+            /**
+             * Learning Enabled
+             * @default false
+             */
+            learning_enabled: boolean;
             /**
              * Activate
              * @default false

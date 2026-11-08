@@ -117,6 +117,7 @@ class CampaignWrite(BaseModel):
     ends_on: date | None = None
     threads_topic_tag: str = ""
     reply_text: str = ""
+    learning_enabled: bool = False
     activate: bool = False
 
 
@@ -146,6 +147,11 @@ class CampaignRead(BaseModel):
     ends_on: date | None
     threads_topic_tag: str | None
     reply_text: str | None
+    learning_enabled: bool
+    learning_notes: str
+    learning_status: str | None
+    learning_checked_at: datetime | None
+    learning_next_at: datetime | None
     status: str
     schedule_cursor: datetime | None
     created_at: datetime

@@ -34,10 +34,10 @@ export function PostCard({ post }: { post: Post }) {
   });
   const editable = ["DRAFT", "PENDING_APPROVAL", "SCHEDULED", "FAILED"].includes(post.status);
   return (
-    <article className="rounded-3xl border border-line bg-white p-4">
+    <article className="rounded-xl border border-line bg-white p-4 shadow-card">
       <div className="flex flex-wrap items-center gap-2">
         <Badge value={post.status} label={postStatusLabel(post.status)} />
-        <span className="text-sm text-stone-600">{post.campaign_name}</span>
+        <span className="text-sm text-muted">{post.campaign_name}</span>
         {post.is_demo_publication && <Badge value="paused" label="Демо, в Threads не отправлено" />}
       </div>
       {editable ? (
@@ -52,28 +52,25 @@ export function PostCard({ post }: { post: Post }) {
       )}
       {editable ? (
         <>
-          <label className="mt-3 block text-sm font-semibold">
+          <label className="mt-3 block text-[13px] font-medium text-muted">
             Продолжение в комментарии
             <Textarea
               aria-label="Продолжение в комментарии"
-              className="mt-1 font-normal"
+              className="mt-1.5 font-normal text-ink"
               value={replyText}
               onChange={(event) => setReplyText(event.target.value)}
             />
           </label>
-          <label className="mt-3 block text-sm font-semibold">
+          <label className="mt-3 block text-[13px] font-medium text-muted">
             Тег Threads
             <Input
               aria-label="Тег Threads"
-              className="mt-1 font-normal"
+              className="mt-1.5 font-normal text-ink"
               value={topicTag}
               onChange={(event) => setTopicTag(event.target.value)}
-              placeholder="Пусто — без темы"
+              placeholder="Без темы"
             />
           </label>
-          <p className="mt-1 text-xs text-stone-600">
-            Пустое продолжение не публикуется. Тег уходит как тема Threads. Сообщество API не принимает.
-          </p>
         </>
       ) : (
         <>
@@ -83,24 +80,19 @@ export function PostCard({ post }: { post: Post }) {
           {post.topic_tag && <p className="mt-2 text-sm">Тема Threads: {post.topic_tag}</p>}
         </>
       )}
-      <dl className="mt-3 grid gap-1 text-xs text-stone-600 sm:grid-cols-2">
-        <div>Часовой пояс: {post.timezone}</div>
-        <div>Локальное время слота: {post.scheduled_local_time ?? "—"}</div>
-        <div>Модель: {post.model ?? "—"}</div>
-        <div>Версия промпта: {post.prompt_version ?? "—"}</div>
-        {post.external_id && <div>Внешний id: {post.external_id}</div>}
-        {post.container_status && <div>Контейнер Threads: {post.container_status}</div>}
-      </dl>
+      {post.scheduled_local_time && (
+        <p className="mt-3 text-xs text-muted">
+          {post.scheduled_local_time} · {post.timezone}
+        </p>
+      )}
       {post.permalink && (
-        <a className="mt-2 inline-block text-sm font-semibold text-moss" href={post.permalink}>
+        <a className="mt-2 inline-block text-sm font-medium underline" href={post.permalink}>
           Открыть пост
         </a>
       )}
-      {post.is_demo_publication && (
-        <p className="mt-2 text-sm text-stone-700">Это демонстрационная публикация. Ссылки на Threads нет.</p>
-      )}
+      {post.is_demo_publication && <p className="mt-2 text-sm text-muted">Ссылки на Threads нет.</p>}
       {post.last_error && (
-        <p role="alert" className="mt-3 rounded-2xl bg-red-50 px-3 py-2 text-sm text-red-900">
+        <p role="alert" className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-900">
           {post.last_error}
         </p>
       )}
@@ -150,7 +142,7 @@ export function PostCard({ post }: { post: Post }) {
         <ul className="mt-3 space-y-2 text-sm">
           {attempts.length === 0 && <li>Попыток ещё нет.</li>}
           {attempts.map((attempt) => (
-            <li key={attempt.id} className="rounded-2xl bg-paper px-3 py-2">
+            <li key={attempt.id} className="rounded-md bg-canvas px-3 py-2">
               {attempt.kind}: {attempt.outcome}
               {attempt.error_message ? ` — ${attempt.error_message}` : ""}
             </li>

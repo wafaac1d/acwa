@@ -1,24 +1,24 @@
 import { cn } from "@/lib/utils";
 
 const tones: Record<string, string> = {
-  connected: "bg-emerald-100 text-emerald-900",
-  active: "bg-emerald-100 text-emerald-900",
-  PUBLISHED: "bg-emerald-100 text-emerald-900",
-  PENDING_APPROVAL: "bg-amber-100 text-amber-950",
-  SCHEDULED: "bg-sky-100 text-sky-950",
-  GENERATING: "bg-sky-100 text-sky-950",
-  PUBLISHING: "bg-sky-100 text-sky-950",
-  paused: "bg-stone-200 text-stone-800",
-  FAILED: "bg-red-100 text-red-900",
-  needs_reauth: "bg-red-100 text-red-900",
-  UNKNOWN: "bg-orange-100 text-orange-950",
-  CANCELLED: "bg-stone-200 text-stone-700",
-  archived: "bg-stone-200 text-stone-700",
+  connected: "bg-emerald-50 text-emerald-900 ring-emerald-200",
+  active: "bg-emerald-50 text-emerald-900 ring-emerald-200",
+  PUBLISHED: "bg-emerald-50 text-emerald-900 ring-emerald-200",
+  PENDING_APPROVAL: "bg-amber-50 text-amber-950 ring-amber-200",
+  SCHEDULED: "bg-slate-50 text-slate-800 ring-slate-200",
+  GENERATING: "bg-slate-50 text-slate-800 ring-slate-200",
+  PUBLISHING: "bg-slate-50 text-slate-800 ring-slate-200",
+  paused: "bg-canvas text-muted ring-line",
+  FAILED: "bg-red-50 text-red-900 ring-red-200",
+  needs_reauth: "bg-red-50 text-red-900 ring-red-200",
+  UNKNOWN: "bg-orange-50 text-orange-950 ring-orange-200",
+  CANCELLED: "bg-canvas text-muted ring-line",
+  archived: "bg-canvas text-muted ring-line",
 };
 
 export function Badge({ value, label }: { value: string; label: string }) {
   return (
-    <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", tones[value] ?? "bg-stone-100")}>
+    <span className={cn("inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset", tones[value] ?? "bg-canvas text-muted ring-line")}>
       {label}
     </span>
   );

@@ -4,14 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api, ApiRequestError, type Account, type Campaign, type CampaignInput, type Page, type Post, type Settings } from "@/api/client";
+import { api, ApiRequestError, type Account, type Campaign, type CampaignInput, type Page, type Post } from "@/api/client";
 import { PostCard } from "@/components/post-card";
 import { TimeLeft } from "@/components/time-left";
 import { YesterdayInsights } from "@/components/yesterday-insights";
 import { ErrorState, LoadingState } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { campaignStatusLabel } from "@/lib/labels";
 import { browserZone, todayISO } from "@/lib/utils";
 
 const schema = z.object({
@@ -39,6 +41,7 @@ const schema = z.object({
   ends_on: z.string(),
   threads_topic_tag: z.string().max(50, "Тема Threads не длиннее 50 символов"),
   reply_text: z.string().max(500, "Продолжение не длиннее 500 символов"),
+  learning_enabled: z.boolean(),
   activate: z.boolean(),
 });
 
@@ -62,10 +65,6 @@ export function CampaignEditorPage() {
   const accounts = useQuery({
     queryKey: ["accounts"],
     queryFn: () => api<{ items: Account[] }>("/api/accounts"),
-  });
-  const settings = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => api<Settings>("/api/settings"),
   });
   const campaign = useQuery({
     queryKey: ["campaign", campaignId],
@@ -110,6 +109,7 @@ export function CampaignEditorPage() {
     },
     onSuccess: async (saved) => {
       await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      await queryClient.invalidateQueries({ queryKey: ["campaign", saved.id] });
       navigate(`/campaigns/${saved.id}`);
     },
     onError: (reason) => {
@@ -141,13 +141,19 @@ export function CampaignEditorPage() {
   if (accounts.isLoading || (!isNew && campaign.isLoading)) return <LoadingState />;
   if (accounts.isError || campaign.isError) return <ErrorState message="Не удалось открыть редактор" />;
   const timezone = form.watch("timezone");
+  const mode = form.watch("publish_mode");
   return (
     <>
     <form className="space-y-6" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link className="text-sm font-semibold text-moss" to="/campaigns">К списку</Link>
-          <h2 className="font-serif text-4xl">{isNew ? "Новая кампания" : campaign.data?.name}</h2>
+          <Link className="text-sm text-muted hover:text-ink" to="/campaigns">Кампании</Link>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold tracking-tight">{isNew ? "Новая кампания" : campaign.data?.name}</h2>
+            {!isNew && campaign.data && (
+              <Badge value={campaign.data.status} label={campaignStatusLabel(campaign.data.status)} />
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {!isNew && campaign.data?.status !== "archived" && campaign.data?.status !== "active" && (
@@ -157,7 +163,7 @@ export function CampaignEditorPage() {
             <Button type="button" variant="secondary" onClick={() => action.mutate("pause")}>Пауза</Button>
           )}
           {!isNew && campaign.data?.status !== "archived" && (
-            <Button type="button" variant="ghost" onClick={() => action.mutate("archive")}>В архив</Button>
+            <Button type="button" variant="secondary" onClick={() => action.mutate("archive")}>В архив</Button>
           )}
           {!isNew && campaign.data?.status === "archived" && (
             <Button type="button" variant="secondary" onClick={() => action.mutate("unarchive")}>Вернуть из архива</Button>
@@ -166,104 +172,122 @@ export function CampaignEditorPage() {
       </div>
       {formError && <ErrorState message={formError} />}
       {connected.length === 0 && (
-        <ErrorState message="Сначала подключите аккаунт в настройках. Демонстрационный аккаунт тоже подходит." />
+        <ErrorState message="Сначала подключите аккаунт в настройках." />
       )}
-      <section className="space-y-3 rounded-3xl border border-line bg-white p-5">
-        <h3 className="font-serif text-2xl">Содержание</h3>
-        <Field label="Аккаунт" error={form.formState.errors.account_id?.message}>
-          <select className="w-full rounded-2xl border border-line px-3 py-2" {...form.register("account_id")}>
-            <option value="">Выберите</option>
-            {connected.map((account) => (
-              <option key={account.id} value={account.id}>
-                {(account.display_name || account.username || "Аккаунт") + (account.is_demo ? " (демо)" : "")}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Название" error={form.formState.errors.name?.message}>
-          <Input {...form.register("name")} />
-        </Field>
+      <Section title="Кампания">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Аккаунт" error={form.formState.errors.account_id?.message}>
+            <Select {...form.register("account_id")}>
+              <option value="">Выберите</option>
+              {connected.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {(account.display_name || account.username || "Аккаунт") + (account.is_demo ? " (демо)" : "")}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Название" error={form.formState.errors.name?.message}>
+            <Input {...form.register("name")} />
+          </Field>
+        </div>
         <Field label="Тема" error={form.formState.errors.topic?.message}>
           <Input {...form.register("topic")} />
         </Field>
-        <Field label="Куда публиковать">
-          <select
-            className="w-full rounded-2xl border border-line px-3 py-2"
-            value={placement}
-            onChange={(event) => {
-              const next = event.target.value as "none" | "topic" | "community";
-              setPlacement(next);
-              if (next !== "topic") form.setValue("threads_topic_tag", "");
-            }}
-          >
-            <option value="none">Не добавлять метку</option>
-            <option value="topic">Тема Threads</option>
-            <option value="community">Сообщество</option>
-          </select>
+        <Field label="Контекст" error={form.formState.errors.context?.message}>
+          <Textarea {...form.register("context")} />
         </Field>
+        <Switch
+          checked={form.watch("learning_enabled")}
+          onCheckedChange={(value) => form.setValue("learning_enabled", value)}
+          label="Обучение"
+          hint="В полночь, по статистике за вчера."
+        />
+        {!isNew && campaign.data?.learning_enabled && (
+          <div className="space-y-1 text-sm text-muted">
+            {campaign.data.learning_status && <p>{campaign.data.learning_status}</p>}
+            {campaign.data.learning_next_at && (
+              <p>
+                Следующий сбор {new Date(campaign.data.learning_next_at).toLocaleString()} ·{" "}
+                <TimeLeft at={campaign.data.learning_next_at} />
+              </p>
+            )}
+            {campaign.data.learning_notes && (
+              <p className="whitespace-pre-wrap text-ink">{campaign.data.learning_notes}</p>
+            )}
+          </div>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Аудитория"><Input {...form.register("audience")} /></Field>
+          <Field label="Цель"><Input {...form.register("goal")} /></Field>
+          <Field label="Язык"><Input {...form.register("language")} /></Field>
+          <Field label="Тон"><Input {...form.register("tone")} /></Field>
+        </div>
+      </Section>
+      <Section title="Публикация">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Куда">
+            <Select
+              value={placement}
+              onChange={(event) => {
+                const next = event.target.value as "none" | "topic" | "community";
+                setPlacement(next);
+                if (next !== "topic") form.setValue("threads_topic_tag", "");
+              }}
+            >
+              <option value="none">Без метки</option>
+              <option value="topic">Тема Threads</option>
+              <option value="community">Сообщество</option>
+            </Select>
+          </Field>
+          <Field label="Длина">
+            <Select {...form.register("desired_length")}>
+              <option value="short">Короткая</option>
+              <option value="medium">Средняя</option>
+              <option value="long">Длинная</option>
+            </Select>
+          </Field>
+        </div>
         {placement === "topic" && (
           <Field label="Название темы" error={form.formState.errors.threads_topic_tag?.message}>
             <Input {...form.register("threads_topic_tag")} placeholder="книги" />
           </Field>
         )}
         {placement === "community" && (
-          <p className="text-sm text-stone-700">
-            Официальный Threads API не принимает публикацию в сообщество. Выберите тему: она уйдёт параметром topic_tag.
-          </p>
+          <p className="text-sm text-muted">Threads API не публикует в сообщество. Укажите тему.</p>
         )}
         <Field label="Продолжение в комментарии" error={form.formState.errors.reply_text?.message}>
-          <Textarea {...form.register("reply_text")} placeholder="Необязательно. Опубликуется ответом на новый пост." />
+          <Textarea {...form.register("reply_text")} placeholder="Необязательно" />
         </Field>
-        <p className="text-sm text-stone-600">
-          Текст попадёт в новые пробные и плановые посты после сохранения. Уже созданные посты не изменятся.
-        </p>
-        {placement === "topic" && (
-          <p className="text-sm text-stone-600">От 1 до 50 символов, без точки и символа &.</p>
-        )}
-        <Field label="Контекст" error={form.formState.errors.context?.message}>
-          <Textarea {...form.register("context")} />
-        </Field>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Аудитория"><Input {...form.register("audience")} /></Field>
-          <Field label="Язык"><Input {...form.register("language")} /></Field>
-          <Field label="Цель"><Input {...form.register("goal")} /></Field>
-          <Field label="Тон и стиль"><Input {...form.register("tone")} /></Field>
+        <div className="grid gap-x-8 sm:grid-cols-3">
+          <Switch checked={form.watch("allow_emoji")} onCheckedChange={(value) => form.setValue("allow_emoji", value)} label="Эмодзи" />
+          <Switch checked={form.watch("allow_hashtags")} onCheckedChange={(value) => form.setValue("allow_hashtags", value)} label="Хэштеги" />
+          <Switch checked={form.watch("allow_links")} onCheckedChange={(value) => form.setValue("allow_links", value)} label="Ссылки" />
         </div>
-      </section>
-      <section className="space-y-3 rounded-3xl border border-line bg-white p-5">
-        <h3 className="font-serif text-2xl">Стиль и ограничения</h3>
-        <Field label="Желаемая длина">
-          <select className="w-full rounded-2xl border border-line px-3 py-2" {...form.register("desired_length")}>
-            <option value="short">Короткая, около 120–200 знаков</option>
-            <option value="medium">Средняя, около 250–400 знаков</option>
-            <option value="long">Длинная, ближе к лимиту</option>
-          </select>
-        </Field>
-        <p className="text-sm text-stone-600">Жёсткий лимит Threads — 500 единиц. Эмодзи считаются по байтам UTF-8. Пожелание длины его не отменяет.</p>
-        <Switch checked={form.watch("allow_emoji")} onCheckedChange={(value) => form.setValue("allow_emoji", value)} label="Разрешить эмодзи" />
-        <Switch checked={form.watch("allow_hashtags")} onCheckedChange={(value) => form.setValue("allow_hashtags", value)} label="Разрешить хэштеги" />
-        <Switch checked={form.watch("allow_links")} onCheckedChange={(value) => form.setValue("allow_links", value)} label="Разрешить ссылки" />
-        <Field label="Обязательные тезисы"><Textarea {...form.register("required_points")} /></Field>
-        <Field label="Запрещённые темы и выражения, по одной строке"><Textarea {...form.register("forbidden")} /></Field>
-        <Field label="Примеры удачных публикаций"><Textarea {...form.register("examples")} /></Field>
-        <Field label="Дополнительные инструкции"><Textarea {...form.register("extra_instructions")} /></Field>
-      </section>
-      <section className="space-y-3 rounded-3xl border border-line bg-white p-5">
-        <h3 className="font-serif text-2xl">Расписание</h3>
-        <p className="text-sm text-stone-700">Время ниже указано в часовом поясе {timezone || "—"}, а не как фиксированное смещение UTC.</p>
-        <Field label="Часовой пояс IANA" error={form.formState.errors.timezone?.message}>
-          <Input list="zones" {...form.register("timezone")} />
-          <datalist id="zones">
-            {zones.map((zone) => <option key={zone} value={zone} />)}
-          </datalist>
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Тезисы"><Textarea {...form.register("required_points")} /></Field>
+          <Field label="Запрещено"><Textarea {...form.register("forbidden")} placeholder="По одной строке" /></Field>
+          <Field label="Примеры"><Textarea {...form.register("examples")} /></Field>
+          <Field label="Инструкции"><Textarea {...form.register("extra_instructions")} /></Field>
+        </div>
+      </Section>
+      <Section title="Расписание" aside={timezone}>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Часовой пояс" error={form.formState.errors.timezone?.message}>
+            <Input list="zones" {...form.register("timezone")} />
+            <datalist id="zones">
+              {zones.map((zone) => <option key={zone} value={zone} />)}
+            </datalist>
+          </Field>
+          <Field label="Начало"><Input type="date" {...form.register("starts_on")} /></Field>
+          <Field label="Окончание"><Input type="date" {...form.register("ends_on")} /></Field>
+        </div>
         <fieldset>
-          <legend className="mb-2 text-sm font-semibold">Дни недели</legend>
-          <div className="flex flex-wrap gap-2">
+          <legend className="mb-2 text-[13px] font-medium text-muted">Дни</legend>
+          <div className="flex flex-wrap gap-1.5">
             {weekdays.map(([value, label]) => {
               const selected = form.watch("weekdays").includes(value);
               return (
-                <label key={value} className={`rounded-full px-3 py-2 text-sm ${selected ? "bg-ink text-white" : "bg-paper"}`}>
+                <label key={value} className={`flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-md border px-2 text-sm ${selected ? "border-ink bg-ink text-white" : "border-line bg-white"}`}>
                   <input
                     className="sr-only"
                     type="checkbox"
@@ -285,52 +309,50 @@ export function CampaignEditorPage() {
           {form.formState.errors.weekdays && <p className="mt-1 text-sm text-red-800">{form.formState.errors.weekdays.message}</p>}
         </fieldset>
         <div className="space-y-2">
-          <span className="mb-1 block text-sm font-semibold">Время публикаций</span>
+          <span className="block text-[13px] font-medium text-muted">Время</span>
           {times.fields.map((field, index) => (
             <div key={field.id} className="flex gap-2">
               <Input type="time" {...form.register(`times_of_day.${index}.value`)} />
-              <Button type="button" variant="ghost" onClick={() => times.remove(index)}>Убрать</Button>
+              <Button type="button" variant="secondary" onClick={() => times.remove(index)}>Убрать</Button>
             </div>
           ))}
           <Button type="button" variant="secondary" onClick={() => times.append({ value: "18:00" })}>Добавить время</Button>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Дата начала"><Input type="date" {...form.register("starts_on")} /></Field>
-          <Field label="Дата окончания, необязательно"><Input type="date" {...form.register("ends_on")} /></Field>
-        </div>
-        <p className="text-sm leading-6 text-stone-700">{settings.data?.missed_slot_policy}</p>
-        <p className="text-sm leading-6 text-stone-700">{settings.data?.unapproved_policy}</p>
         {campaign.data && campaign.data.upcoming.length > 0 && (
-          <ul className="text-sm">
+          <ul className="space-y-1 text-sm">
             {campaign.data.upcoming.map((slot, index) => (
-              <li key={slot.scheduled_for}>
-                {index === 0 ? "Ближайший пост" : "Следующий слот"}: {slot.local_time} ({slot.timezone}) ·{" "}
-                <TimeLeft at={slot.scheduled_for} />
+              <li key={slot.scheduled_for} className="tabular-nums">
+                <span className="text-muted">{index === 0 ? "Ближайший" : "Далее"}</span> {slot.local_time} · <TimeLeft at={slot.scheduled_for} />
               </li>
             ))}
           </ul>
         )}
         {campaign.data?.skipped?.map((slot) => (
-          <p key={slot.slot_at} className="text-sm text-stone-600">{slot.local_time}: {slot.reason_label}</p>
+          <p key={slot.slot_at} className="text-sm text-muted">{slot.local_time} · {slot.reason_label}</p>
         ))}
-      </section>
-      <section className="space-y-3 rounded-3xl border border-line bg-white p-5">
-        <h3 className="font-serif text-2xl">Режим публикации</h3>
-        <label className="flex gap-2 text-sm"><input type="radio" value="manual" {...form.register("publish_mode")} /> Ручное подтверждение</label>
-        <label className="flex gap-2 text-sm"><input type="radio" value="automatic" {...form.register("publish_mode")} /> Автоматически после проверки ограничений</label>
-        <Switch checked={form.watch("activate")} onCheckedChange={(value) => form.setValue("activate", value)} label="Включить расписание при сохранении" />
+      </Section>
+      <Section title="Режим">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 text-sm ${mode === "manual" ? "border-ink" : "border-line"}`}>
+            <input type="radio" value="manual" {...form.register("publish_mode")} /> Ручное подтверждение
+          </label>
+          <label className={`flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 text-sm ${mode === "automatic" ? "border-ink" : "border-line"}`}>
+            <input type="radio" value="automatic" {...form.register("publish_mode")} /> Автоматически
+          </label>
+        </div>
+        <Switch checked={form.watch("activate")} onCheckedChange={(value) => form.setValue("activate", value)} label="Включить при сохранении" />
         <Button type="submit" disabled={save.isPending}>Сохранить</Button>
-      </section>
+      </Section>
       {!isNew && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-serif text-2xl">Пробный пост</h3>
+            <h3 className="text-sm font-medium">Пробный пост</h3>
             <Button type="button" onClick={() => trial.mutate()} disabled={trial.isPending}>Сгенерировать</Button>
           </div>
           {trials.data?.items[0] ? (
             <PostCard key={trials.data.items[0].id} post={trials.data.items[0]} />
           ) : (
-            <p className="text-sm">Пробных постов ещё нет.</p>
+            <p className="text-sm text-muted">Пробных постов нет.</p>
           )}
         </section>
       )}
@@ -340,12 +362,24 @@ export function CampaignEditorPage() {
   );
 }
 
+function Section({ title, aside, children }: { title: string; aside?: string; children: ReactNode }) {
+  return (
+    <section className="rounded-xl border border-line bg-white shadow-card">
+      <div className="flex items-baseline justify-between gap-3 border-b border-line px-5 py-3">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {aside && <p className="text-xs text-muted">{aside}</p>}
+      </div>
+      <div className="space-y-4 p-5">{children}</div>
+    </section>
+  );
+}
+
 function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-semibold">{label}</span>
+      <span className="mb-1.5 block text-[13px] font-medium text-muted">{label}</span>
       {children}
-      {error && <span className="mt-1 block text-sm font-normal text-red-800">{error}</span>}
+      {error && <span className="mt-1 block text-xs font-normal text-red-800">{error}</span>}
     </label>
   );
 }
@@ -377,6 +411,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
       ends_on: "",
       threads_topic_tag: "",
       reply_text: "",
+      learning_enabled: false,
       activate: false,
     };
   }
@@ -405,6 +440,7 @@ function defaultValues(accountId: string | undefined, campaign?: Campaign): Form
     ends_on: campaign.ends_on ?? "",
     threads_topic_tag: campaign.threads_topic_tag ?? "",
     reply_text: campaign.reply_text ?? "",
+    learning_enabled: campaign.learning_enabled,
     activate: campaign.status === "active",
   };
 }

@@ -13,6 +13,7 @@ from acwa.models import Job, Post
 from acwa.security.crypto import TokenCipher
 from acwa.security.redact import redact
 from acwa.services.jobs import claim_next_job, recover_stuck_jobs
+from acwa.services.learning import learn_due_campaigns
 from acwa.services.pipeline import run_generation, run_publish
 from acwa.services.planner import plan_due_campaigns
 
@@ -31,6 +32,7 @@ def run_once(
 ) -> bool:
     recover_stuck_jobs(session, clock.now(), timedelta(seconds=settings.worker_lease_seconds))
     plan_due_campaigns(session, clock, settings)
+    learn_due_campaigns(session, clock=clock, settings=settings, threads=threads, cipher=cipher)
     job = claim_next_job(session, clock.now(), worker_id)
     if job is None:
         session.commit()

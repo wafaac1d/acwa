@@ -66,43 +66,45 @@ function AccessGate({ children }: { children: ReactNode }) {
       })
       .finally(() => setChecking(false));
   }, []);
-  if (health.isLoading || checking) return <p className="p-8">Загрузка…</p>;
+  if (health.isLoading || checking) return <p className="grid min-h-screen place-items-center bg-canvas text-sm text-muted">Загрузка</p>;
   if (health.isError || !health.data) {
-    return <p className="p-8">Не удалось связаться с сервером. Проверьте, что backend запущен.</p>;
+    return <p className="grid min-h-screen place-items-center bg-canvas px-6 text-sm text-muted">Сервер недоступен.</p>;
   }
   if (unlocked && health.data.auth_required) return children;
   if (!health.data.auth_required) {
-    return <p className="p-8">Сервер запущен без пароля. Задайте ACWA_AUTH_TOKEN и перезапустите его.</p>;
+    return <p className="grid min-h-screen place-items-center bg-canvas px-6 text-sm text-muted">Задайте ACWA_AUTH_TOKEN и перезапустите сервер.</p>;
   }
   return (
-    <form
-      className="mx-auto mt-16 max-w-md space-y-3 rounded-3xl bg-white p-6"
-      onSubmit={(event) => {
-        event.preventDefault();
-        setDenied(false);
-        saveAccessToken(password);
-        api("/api/settings")
-          .then(() => setUnlocked(true))
-          .catch(() => {
-            clearAccessToken();
-            setDenied(true);
-          });
-      }}
-    >
-      <h1 className="font-serif text-3xl">Вход</h1>
-      <p className="text-sm">Пароль задаётся на сервере в ACWA_AUTH_TOKEN. Это не пароль Threads и не ключ DeepSeek.</p>
-      <label className="block text-sm font-semibold">
-        Пароль
-        <Input
-          className="mt-1 font-normal"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-      </label>
-      {denied && <p className="text-sm text-red-800">Пароль не подошёл.</p>}
-      <Button type="submit">Войти</Button>
-    </form>
+    <div className="grid min-h-screen place-items-center bg-canvas px-4">
+      <form
+        className="w-full max-w-sm rounded-xl border border-line bg-white p-6 shadow-card"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setDenied(false);
+          saveAccessToken(password);
+          api("/api/settings")
+            .then(() => setUnlocked(true))
+            .catch(() => {
+              clearAccessToken();
+              setDenied(true);
+            });
+        }}
+      >
+        <p className="text-[15px] font-semibold">ACWA</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Вход</h1>
+        <label className="mt-6 block text-[13px] font-medium text-muted">
+          Пароль
+          <Input
+            className="mt-1.5 font-normal text-ink"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        {denied && <p className="mt-2 text-sm text-red-800">Пароль не подошёл.</p>}
+        <Button className="mt-5 w-full" type="submit">Войти</Button>
+      </form>
+    </div>
   );
 }

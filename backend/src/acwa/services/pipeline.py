@@ -277,6 +277,7 @@ def run_generation(
         allow_hashtags=campaign.allow_hashtags,
         allow_links=campaign.allow_links,
         recent_posts=history,
+        learning_notes=campaign.learning_notes if campaign.learning_enabled else "",
         temperature=app_settings.temperature,
         max_tokens=app_settings.max_tokens,
         variation=variation,
