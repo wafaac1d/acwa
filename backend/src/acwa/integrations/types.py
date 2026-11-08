@@ -18,6 +18,7 @@ class IntegrationError(Exception):
     message: str
     retry_after: timedelta | None = None
     http_status: int | None = None
+    code: int | None = None
 
     def __str__(self) -> str:
         return self.message

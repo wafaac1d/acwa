@@ -182,6 +182,47 @@ def test_threads_media_insights_accepts_an_empty_list() -> None:
     assert result.shares is None
 
 
+def test_threads_media_insights_keeps_metrics_when_one_is_rejected() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        metric = request.url.params["metric"]
+        calls.append(metric)
+        if "," in metric or metric == "views":
+            return httpx.Response(400, json={"error": {"message": "invalid metric", "code": 100}})
+        return httpx.Response(200, json={"data": [{"name": metric, "period": "lifetime", "values": [{"value": 3}]}]})
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    result = client.media_insights("media-1", "secret-token")
+    assert calls[0] == "views,likes,replies,reposts,quotes,shares"
+    assert "views" in calls
+    assert result.views is None
+    assert result.likes == 3
+    assert result.replies == 3
+    assert result.shares == 3
+
+
+def test_threads_media_insights_permission_error_is_not_split() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.params["metric"])
+        return httpx.Response(
+            400,
+            json={"error": {"message": "(#10) Application does not have permission", "code": 10}},
+        )
+
+    client = ThreadsClient(_settings(), transport=httpx.MockTransport(handler))
+    try:
+        client.media_insights("media-1", "secret-token")
+    except IntegrationError as exc:
+        assert calls == ["views,likes,replies,reposts,quotes,shares"]
+        assert "permission" in exc.message
+        assert "secret-token" not in exc.message
+        return
+    raise AssertionError("expected insights error")
+
+
 def test_threads_media_insights_error_does_not_keep_the_token() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(400, json={"error": {"message": "permission", "code": 10, "type": "OAuthException"}})

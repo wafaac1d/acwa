@@ -30,6 +30,7 @@ from acwa.security.redact import redact
 
 RATE_LIMIT_CODES = {4, 17, 32, 613}
 AUTH_CODES = {102, 190}
+INSIGHT_METRICS = ("views", "likes", "replies", "reposts", "quotes", "shares")
 CONTAINER_STATUSES = {"EXPIRED", "ERROR", "FINISHED", "IN_PROGRESS", "PUBLISHED"}
 
 
@@ -245,13 +246,29 @@ class ThreadsClient:
         return items
 
     def media_insights(self, media_id: str, access_token: str) -> MediaInsights:
+        try:
+            values = self._insight_values(media_id, access_token, ",".join(INSIGHT_METRICS))
+        except IntegrationError as exc:
+            if not _metric_rejected(exc):
+                raise
+            values = {}
+            accepted = False
+            for metric in INSIGHT_METRICS:
+                try:
+                    values.update(self._insight_values(media_id, access_token, metric))
+                    accepted = True
+                except IntegrationError as single_exc:
+                    if not _metric_rejected(single_exc):
+                        raise
+            if not accepted:
+                raise
+        return _media_insights(values)
+
+    def _insight_values(self, media_id: str, access_token: str, metric: str) -> dict[str, int]:
         response = self._request(
             "GET",
             f"/v1.0/{media_id}/insights",
-            params={
-                "metric": "views,likes,replies,reposts,quotes,shares",
-                "access_token": access_token,
-            },
+            params={"metric": metric, "access_token": access_token},
             ambiguous=False,
         )
         body = _object(response)
@@ -266,23 +283,9 @@ class ThreadsClient:
             if not isinstance(raw_values, list) or not raw_values or not isinstance(raw_values[0], dict):
                 continue
             metric_value = raw_values[0].get("value")
-            if type(metric_value) is int and row["name"] in {
-                "views",
-                "likes",
-                "replies",
-                "reposts",
-                "quotes",
-                "shares",
-            }:
+            if type(metric_value) is int and row["name"] in INSIGHT_METRICS:
                 values[row["name"]] = metric_value
-        return MediaInsights(
-            views=values.get("views"),
-            likes=values.get("likes"),
-            replies=values.get("replies"),
-            reposts=values.get("reposts"),
-            quotes=values.get("quotes"),
-            shares=values.get("shares"),
-        )
+        return values
 
     def _require_app(self) -> None:
         if not self._settings.threads_app_id or not self._settings.threads_app_secret:
@@ -343,18 +346,39 @@ def _map_threads_error(response: httpx.Response, *, ambiguous: bool) -> Integrat
             ErrorKind.RATE_LIMIT,
             "Threads ограничил частоту запросов или число публикаций",
             http_status=response.status_code,
+            code=code,
         )
     if response.status_code in {401, 403} or code in AUTH_CODES:
         return IntegrationError(
             ErrorKind.AUTH,
             "Срок авторизации Threads истёк или доступ отозван. Подключите аккаунт заново.",
             http_status=response.status_code,
+            code=code,
         )
     if response.status_code >= 500:
         if ambiguous:
             return AmbiguousPublishError(message)
-        return IntegrationError(ErrorKind.TRANSIENT, message, http_status=response.status_code)
-    return IntegrationError(ErrorKind.PERMANENT, message, http_status=response.status_code)
+        return IntegrationError(ErrorKind.TRANSIENT, message, http_status=response.status_code, code=code)
+    return IntegrationError(ErrorKind.PERMANENT, message, http_status=response.status_code, code=code)
+
+
+def _metric_rejected(exc: IntegrationError) -> bool:
+    if exc.kind != ErrorKind.PERMANENT:
+        return False
+    if exc.code == 100:
+        return True
+    return "metric" in exc.message.casefold()
+
+
+def _media_insights(values: dict[str, int]) -> MediaInsights:
+    return MediaInsights(
+        views=values.get("views"),
+        likes=values.get("likes"),
+        replies=values.get("replies"),
+        reposts=values.get("reposts"),
+        quotes=values.get("quotes"),
+        shares=values.get("shares"),
+    )
 
 
 def _token_bundle(response: httpx.Response, user_id: str | None) -> TokenBundle:

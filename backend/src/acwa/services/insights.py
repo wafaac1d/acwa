@@ -21,10 +21,26 @@ from acwa.security.redact import redact
 from acwa.services.pipeline import _token
 
 INSIGHT_KEYS = ("views", "likes", "replies", "reposts", "quotes", "shares")
-SCOPE_MESSAGE = (
-    "Threads не отдал статистику. Добавьте разрешение threads_manage_insights "
-    "в приложении Meta и подключите аккаунт заново."
+TOKEN_SCOPE_NOTICE = (
+    "Разрешение threads_manage_insights в приложении Meta уже есть, но в токене этого аккаунта его нет. "
+    "Подключите аккаунт заново. Если после этого его снова не будет, добавьте threads_manage_insights "
+    "в ACWA_THREADS_SCOPES и подключите аккаунт ещё раз."
 )
+
+
+def token_lacks_insights_scope(scopes: str | None) -> bool:
+    if not scopes or scopes == "demo":
+        return False
+    granted = {item.strip() for item in scopes.split(",") if item.strip()}
+    return "threads_manage_insights" not in granted
+
+
+def explain_insights_error(exc: IntegrationError) -> str:
+    message = redact(exc.message)
+    lowered = message.casefold()
+    if exc.kind == ErrorKind.AUTH or "permission" in lowered or "threads_manage_insights" in lowered:
+        return f"{message} Подключите аккаунт заново, чтобы токен получил threads_manage_insights."
+    return message
 
 
 def yesterday_window(now: datetime, timezone: str) -> tuple[datetime, datetime, str]:
@@ -74,6 +90,8 @@ def collect_yesterday_insights(
         return "В демонстрационном режиме Threads не отдаёт статистику. Цифры ниже не запрашивались."
     if account.status != "connected":
         return "Аккаунт Threads не подключён. Статистика не запрашивалась."
+    if token_lacks_insights_scope(account.scopes):
+        return TOKEN_SCOPE_NOTICE
     try:
         token = _token(session, account, threads, cipher, clock)
     except IntegrationError as exc:
@@ -87,9 +105,7 @@ def collect_yesterday_insights(
         try:
             metrics = threads.media_insights(post.external_id, token)
         except IntegrationError as exc:
-            post.insights_error = (
-                SCOPE_MESSAGE if exc.kind in {ErrorKind.AUTH, ErrorKind.PERMANENT} else redact(exc.message)
-            )
+            post.insights_error = explain_insights_error(exc)
             post.updated_at = now
             continue
         post.insights = {
