@@ -93,6 +93,7 @@ export function CampaignEditorPage() {
   const times = useFieldArray({ control: form.control, name: "times_of_day" });
   const [formError, setFormError] = useState<string | null>(null);
   const [placement, setPlacement] = useState<"none" | "topic" | "community">("none");
+  const [tab, setTab] = useState<"settings" | "learning">("settings");
   useEffect(() => {
     if (!campaign.data) return;
     setPlacement(campaign.data.threads_topic_tag ? "topic" : "none");
@@ -143,7 +144,6 @@ export function CampaignEditorPage() {
   if (accounts.isError || campaign.isError) return <ErrorState message="Не удалось открыть редактор" />;
   const timezone = form.watch("timezone");
   const mode = form.watch("publish_mode");
-  const [tab, setTab] = useState<"settings" | "learning">("settings");
   return (
     <>
     <form className="space-y-6" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
