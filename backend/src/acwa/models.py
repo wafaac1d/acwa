@@ -101,6 +101,23 @@ class Campaign(Base):
 
     account: Mapped[ThreadsAccount] = relationship(back_populates="campaigns")
     posts: Mapped[list["Post"]] = relationship(back_populates="campaign")
+    learning_events: Mapped[list["LearningEvent"]] = relationship(back_populates="campaign")
+
+
+class LearningEvent(Base):
+    __tablename__ = "learning_events"
+    __table_args__ = (Index("ix_learning_events_campaign_created", "campaign_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    covered_on: Mapped[str | None] = mapped_column(String(10))
+    changed: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    previous_notes: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    campaign: Mapped[Campaign] = relationship(back_populates="learning_events")
 
 
 class Post(Base):

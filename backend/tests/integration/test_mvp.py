@@ -279,6 +279,22 @@ def test_learning_does_not_invent_demo_stats_and_ranks_live_totals(session_facto
     assert "Сильный конкретный пост" in campaign.learning_notes
     assert campaign.learning_notes.index("Сильный конкретный пост") < campaign.learning_notes.index("Слабый общий пост")
     assert "просмотры 20" in campaign.learning_notes
+    from sqlalchemy import select
+
+    from acwa.models import LearningEvent
+
+    events = session.scalars(
+        select(LearningEvent).where(LearningEvent.campaign_id == campaign.id).order_by(LearningEvent.created_at)
+    ).all()
+    assert len(events) == 2
+    assert events[0].changed is False
+    assert events[0].reason and "не запрашива" in events[0].reason
+    assert events[0].notes == ""
+    assert events[1].changed is True
+    assert events[1].previous_notes == ""
+    assert "просмотры 20" in events[1].reason
+    assert events[1].reason.index("Сильный конкретный пост") < events[1].reason.index("Слабый общий пост")
+    assert events[1].notes == campaign.learning_notes
     session.close()
 
 

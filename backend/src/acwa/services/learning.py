@@ -6,6 +6,8 @@ not invent engagement. After downtime only the latest finished day is learned;
 missed midnights are not replayed one by one.
 """
 
+import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -17,7 +19,7 @@ from acwa.config import Settings
 from acwa.domain.status import CampaignStatus
 from acwa.integrations.threads import ThreadsGateway
 from acwa.integrations.types import IntegrationError
-from acwa.models import Campaign, Post
+from acwa.models import Campaign, LearningEvent, Post
 from acwa.security.crypto import TokenCipher
 from acwa.security.redact import redact
 from acwa.services.insights import collect_yesterday_insights, yesterday_posts
@@ -31,6 +33,12 @@ METRIC_LABELS = (
     ("shares", "пересылки"),
 )
 NOTES_LIMIT = 2000
+
+
+@dataclass(frozen=True)
+class LearningOutcome:
+    reason: str
+    covered_on: str | None
 
 
 def next_local_midnight(now: datetime, timezone: str) -> datetime:
@@ -68,12 +76,28 @@ def learn_due_campaigns(
         )
     ).all()
     for campaign in campaigns:
+        previous = campaign.learning_notes or ""
         try:
-            learn_campaign(session, campaign, clock=clock, settings=settings, threads=threads, cipher=cipher)
+            outcome = learn_campaign(session, campaign, clock=clock, settings=settings, threads=threads, cipher=cipher)
         except IntegrationError as exc:
             campaign.learning_status = redact(exc.message)[:500]
+            outcome = LearningOutcome(campaign.learning_status, None)
         except Exception:
             campaign.learning_status = "Не удалось обновить обучение."
+            outcome = LearningOutcome(campaign.learning_status, None)
+        notes = campaign.learning_notes or ""
+        session.add(
+            LearningEvent(
+                id=uuid.uuid4(),
+                campaign_id=campaign.id,
+                created_at=now,
+                covered_on=outcome.covered_on,
+                changed=notes != previous,
+                reason=outcome.reason[:NOTES_LIMIT],
+                previous_notes=previous,
+                notes=notes,
+            )
+        )
         campaign.learning_checked_at = now
         campaign.learning_next_at = midnight_after(now, campaign.timezone)
         campaign.updated_at = now
@@ -87,7 +111,7 @@ def learn_campaign(
     settings: Settings,
     threads: ThreadsGateway,
     cipher: TokenCipher,
-) -> None:
+) -> LearningOutcome:
     notice = collect_yesterday_insights(
         session,
         campaign,
@@ -99,16 +123,32 @@ def learn_campaign(
     label, posts = yesterday_posts(session, campaign, clock)
     if notice:
         campaign.learning_status = notice
-        return
+        return LearningOutcome(notice, label)
     measured = [post for post in posts if _measured(post)]
     if not posts:
-        campaign.learning_status = "Вчера опубликованных постов не было. Контекст генерации не менялся."
-        return
+        reason = "Вчера опубликованных постов не было. Контекст генерации не менялся."
+        campaign.learning_status = reason
+        return LearningOutcome(reason, label)
     if not measured:
-        campaign.learning_status = "Статистика Threads за вчера не собрана. Контекст генерации не менялся."
-        return
+        reason = "Статистика Threads за вчера не собрана. Контекст генерации не менялся."
+        campaign.learning_status = reason
+        return LearningOutcome(reason, label)
     campaign.learning_notes = learning_notes(measured, date_label=label, timezone=campaign.timezone)[:NOTES_LIMIT]
     campaign.learning_status = f"Контекст генерации уточнён по статистике за {label}."
+    return LearningOutcome(learning_reason(measured), label)
+
+
+def learning_reason(posts: list[Post]) -> str:
+    ranked = sorted(posts, key=_score, reverse=True)
+    best = ranked[0]
+    worst = ranked[-1]
+    totals = "Цифры — текущие итоги Threads, не прирост за день."
+    if best.id == worst.id or _score(best) == _score(worst):
+        return f"Сравнить не с чем: «{_excerpt(best.text)}» ({_metrics(best)}). {totals}"
+    return (
+        f"«{_excerpt(best.text)}» набрал больше ({_metrics(best)}), "
+        f"чем «{_excerpt(worst.text)}» ({_metrics(worst)}). {totals}"
+    )
 
 
 def learning_notes(posts: list[Post], *, date_label: str, timezone: str) -> str:

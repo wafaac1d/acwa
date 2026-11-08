@@ -161,6 +161,20 @@ class CampaignRead(BaseModel):
     missed_slot_policy: str
 
 
+class LearningEventRead(BaseModel):
+    id: UUID
+    created_at: datetime
+    covered_on: str | None
+    changed: bool
+    reason: str
+    previous_notes: str
+    notes: str
+
+
+class LearningHistory(BaseModel):
+    items: list[LearningEventRead]
+
+
 class CampaignSummary(BaseModel):
     id: UUID
     name: str

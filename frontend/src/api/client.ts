@@ -10,6 +10,8 @@ export type Post = components["schemas"]["PostRead"];
 export type Attempt = components["schemas"]["AttemptRead"];
 export type Dashboard = components["schemas"]["DashboardRead"];
 export type YesterdayInsights = components["schemas"]["YesterdayInsights"];
+export type LearningEvent = components["schemas"]["LearningEventRead"];
+export type LearningHistory = components["schemas"]["LearningHistory"];
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export class ApiRequestError extends Error {

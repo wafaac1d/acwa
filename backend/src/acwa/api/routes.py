@@ -19,6 +19,8 @@ from acwa.api.schemas import (
     GenerationSettings,
     HealthResponse,
     InsightMetrics,
+    LearningEventRead,
+    LearningHistory,
     OAuthStartRead,
     PostPage,
     PostRead,
@@ -35,7 +37,7 @@ from acwa.clock import Clock
 from acwa.config import PROMPT_VERSION, THREADS_TEXT_LIMIT, Settings
 from acwa.domain.status import HISTORY_STATUSES, MISSED_SLOT_POLICY, QUEUE_STATUSES, UNAPPROVED_OVERDUE_POLICY
 from acwa.errors import ApiError
-from acwa.models import AppSetting, Campaign, Post, PostAttempt, SkippedSlot, ThreadsAccount
+from acwa.models import AppSetting, Campaign, LearningEvent, Post, PostAttempt, SkippedSlot, ThreadsAccount
 from acwa.security.crypto import TokenCipher
 from acwa.services.accounts import (
     complete_oauth,
@@ -212,6 +214,31 @@ def create_campaign(
     )
     session.flush()
     return _campaign_read(session, campaign, clock)
+
+
+@router.get("/campaigns/{campaign_id}/learning", response_model=LearningHistory)
+def learning_history(campaign_id: str, session: Session = Depends(get_session)) -> LearningHistory:
+    campaign = _campaign(session, campaign_id)
+    rows = session.scalars(
+        select(LearningEvent)
+        .where(LearningEvent.campaign_id == campaign.id)
+        .order_by(LearningEvent.created_at.desc(), LearningEvent.id.desc())
+        .limit(60)
+    ).all()
+    return LearningHistory(
+        items=[
+            LearningEventRead(
+                id=row.id,
+                created_at=row.created_at,
+                covered_on=row.covered_on,
+                changed=row.changed,
+                reason=row.reason,
+                previous_notes=row.previous_notes,
+                notes=row.notes,
+            )
+            for row in rows
+        ]
+    )
 
 
 @router.get("/campaigns/{campaign_id}", response_model=CampaignRead)
@@ -656,9 +683,7 @@ def _insight_metrics(raw: object, collected_at: object) -> InsightMetrics | None
     if collected_at is None:
         return None
     data = raw if isinstance(raw, dict) else {}
-    return InsightMetrics(
-        **{key: data.get(key) if type(data.get(key)) is int else None for key in INSIGHT_KEYS}
-    )
+    return InsightMetrics(**{key: data.get(key) if type(data.get(key)) is int else None for key in INSIGHT_KEYS})
 
 
 def _post_read(session: Session, post: Post) -> PostRead:

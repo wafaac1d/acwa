@@ -7,6 +7,7 @@ import { z } from "zod";
 import { api, ApiRequestError, type Account, type Campaign, type CampaignInput, type Page, type Post } from "@/api/client";
 import { PostCard } from "@/components/post-card";
 import { TimeLeft } from "@/components/time-left";
+import { LearningHistoryPanel } from "@/components/learning-history";
 import { YesterdayInsights } from "@/components/yesterday-insights";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +143,7 @@ export function CampaignEditorPage() {
   if (accounts.isError || campaign.isError) return <ErrorState message="Не удалось открыть редактор" />;
   const timezone = form.watch("timezone");
   const mode = form.watch("publish_mode");
+  const [tab, setTab] = useState<"settings" | "learning">("settings");
   return (
     <>
     <form className="space-y-6" onSubmit={form.handleSubmit((values) => save.mutate(values))}>
@@ -170,7 +172,17 @@ export function CampaignEditorPage() {
           )}
         </div>
       </div>
+      {!isNew && (
+        <div className="flex gap-1">
+          <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>Настройки</TabButton>
+          <TabButton active={tab === "learning"} onClick={() => setTab("learning")}>Обучение</TabButton>
+        </div>
+      )}
       {formError && <ErrorState message={formError} />}
+      {!isNew && tab === "learning" && campaignId ? (
+        <LearningHistoryPanel campaignId={campaignId} nextAt={campaign.data?.learning_next_at ?? null} />
+      ) : (
+      <>
       {connected.length === 0 && (
         <ErrorState message="Сначала подключите аккаунт в настройках." />
       )}
@@ -202,19 +214,11 @@ export function CampaignEditorPage() {
           label="Обучение"
           hint="В полночь, по статистике за вчера."
         />
-        {!isNew && campaign.data?.learning_enabled && (
-          <div className="space-y-1 text-sm text-muted">
-            {campaign.data.learning_status && <p>{campaign.data.learning_status}</p>}
-            {campaign.data.learning_next_at && (
-              <p>
-                Следующий сбор {new Date(campaign.data.learning_next_at).toLocaleString()} ·{" "}
-                <TimeLeft at={campaign.data.learning_next_at} />
-              </p>
-            )}
-            {campaign.data.learning_notes && (
-              <p className="whitespace-pre-wrap text-ink">{campaign.data.learning_notes}</p>
-            )}
-          </div>
+        {!isNew && campaign.data?.learning_enabled && campaign.data.learning_next_at && (
+          <p className="text-sm text-muted">
+            Следующий сбор {new Date(campaign.data.learning_next_at).toLocaleString()} ·{" "}
+            <TimeLeft at={campaign.data.learning_next_at} />
+          </p>
         )}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Аудитория"><Input {...form.register("audience")} /></Field>
@@ -356,9 +360,23 @@ export function CampaignEditorPage() {
           )}
         </section>
       )}
+      </>
+      )}
     </form>
-    {!isNew && campaignId && <YesterdayInsights campaignId={campaignId} />}
+    {!isNew && tab === "settings" && campaignId && <YesterdayInsights campaignId={campaignId} />}
     </>
+  );
+}
+
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-sm ${active ? "bg-white font-medium text-ink shadow-card" : "text-muted hover:text-ink"}`}
+    >
+      {children}
+    </button>
   );
 }
 

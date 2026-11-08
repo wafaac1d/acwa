@@ -4,7 +4,7 @@ from uuid import uuid4
 from acwa.integrations.types import ErrorKind, IntegrationError
 from acwa.models import Post
 from acwa.services.insights import explain_insights_error, token_lacks_insights_scope, yesterday_window
-from acwa.services.learning import learning_notes, midnight_after, next_local_midnight
+from acwa.services.learning import learning_notes, learning_reason, midnight_after, next_local_midnight
 
 
 def test_stored_token_without_insights_is_not_described_as_a_missing_app_permission() -> None:
@@ -41,6 +41,9 @@ def test_learning_waits_until_local_midnight_and_ranks_real_totals() -> None:
     assert notes.index("Короткий конкретный совет") < notes.index("Общий призыв без детали")
     assert "просмотры 20" in notes
     assert "не прирост за день" in notes
+    reason = learning_reason([weak, strong])
+    assert reason.index("Короткий конкретный совет") < reason.index("Общий призыв без детали")
+    assert "набрал больше" in reason
 
 
 def test_yesterday_window_follows_the_campaign_timezone() -> None:

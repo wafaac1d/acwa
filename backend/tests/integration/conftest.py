@@ -66,7 +66,7 @@ def clean_database(postgres_url: str) -> Iterator[None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE TABLE post_attempts, jobs, skipped_slots, posts, campaigns, "
+                "TRUNCATE TABLE post_attempts, jobs, skipped_slots, posts, learning_events, campaigns, "
                 "oauth_states, app_settings, threads_accounts RESTART IDENTITY CASCADE"
             )
         )

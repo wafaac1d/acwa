@@ -142,6 +142,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/campaigns/{campaign_id}/learning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Learning History */
+        get: operations["learning_history_api_campaigns__campaign_id__learning_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/campaigns/{campaign_id}": {
         parameters: {
             query?: never;
@@ -804,6 +821,34 @@ export interface components {
             /** Shares */
             shares?: number | null;
         };
+        /** LearningEventRead */
+        LearningEventRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Covered On */
+            covered_on: string | null;
+            /** Changed */
+            changed: boolean;
+            /** Reason */
+            reason: string;
+            /** Previous Notes */
+            previous_notes: string;
+            /** Notes */
+            notes: string;
+        };
+        /** LearningHistory */
+        LearningHistory: {
+            /** Items */
+            items: components["schemas"]["LearningEventRead"][];
+        };
         /** OAuthStartRead */
         OAuthStartRead: {
             /** Authorization Url */
@@ -1354,6 +1399,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    learning_history_api_campaigns__campaign_id__learning_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningHistory"];
                 };
             };
             /** @description Validation Error */
